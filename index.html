@@ -780,7 +780,7 @@ function render() {
       <button type="button" class="primary pdf" id="pdfBtn">Stampa PDF</button>
     </div>
     ${S.selMonths.size > 1 ? `<section class="card" id="growthCard">
-      <div class="card-head"><div><h2>📈 Crescita mese per mese</h2><p>Colonne: punti validati nel mese (verde luce, arancio gas). Linea azzurra: punti in fornitura a fine mese, al netto degli usciti (numero scritto in verticale accanto a ogni punto).</p></div></div>
+      <div class="card-head"><div><h2>📈 Crescita mese per mese</h2><p>Colonne: punti validati nel mese (verde luce, arancio gas). Linea azzurra: punti in fornitura a fine mese, al netto degli usciti (numero scritto in verticale sopra ogni pallino).</p></div></div>
       <div class="chartbox" id="cbGr"><canvas id="chGr" role="img" aria-label="Crescita mensile dei punti validati e in fornitura"></canvas></div>
     </section>` : ''}
 
@@ -1181,22 +1181,22 @@ function drawGrowth(months, keys, c) {
       plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 14, boxHeight: 14, font: { size: 14, weight: '600' }, color: c.ink, padding: 14 } },
         tooltip: { titleFont: { size: 14 }, bodyFont: { size: 13 } } },
       scales: { x: { stacked: true, grid: { display: false }, ticks: { font: { size: 14, weight: '700' }, color: c.ink, maxRotation: 0, minRotation: 0, autoSkip: false } },
-        y: { stacked: true, beginAtZero: true, grace: '15%', grid: { color: c.grid }, ticks: { precision: 0, font: { size: 12 } }, title: { display: true, text: 'Punti', font: { size: 13, weight: '600' } } } } },
+        y: { stacked: true, beginAtZero: true, grace: '45%', grid: { color: c.grid }, ticks: { precision: 0, font: { size: 12 } }, title: { display: true, text: 'Punti', font: { size: 13, weight: '600' } } } } },
     plugins: [{ id: 'grLabels', afterDatasetsDraw(chart) {
       const { ctx } = chart; ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const mE = chart.getDatasetMeta(1).data, mG = chart.getDatasetMeta(2).data, line = chart.getDatasetMeta(0).data;
-      // value inside each coloured segment, when there is room
-      ctx.font = `700 13px ${c.font}`; ctx.fillStyle = '#0b1f10';
-      mE.forEach((b, i) => { if (nE[i] && b.base - b.y > 16) ctx.fillText(nE[i], b.x, (b.y + b.base) / 2); });
+      // value inside each coloured segment, when there is room; moved aside when the vertical supply label crosses the bar
+      ctx.font = `700 13px ${c.font}`;
+      const shift = i => line[i].y > Math.min(mE[i].y, mG[i].y) - 4 ? -Math.min(18, (mE[i].width || 40) / 4) : 0;
+      ctx.fillStyle = '#0b1f10';
+      mE.forEach((b, i) => { if (nE[i] && b.base - b.y > 16) ctx.fillText(nE[i], b.x + shift(i), (b.y + b.base) / 2); });
       ctx.fillStyle = '#2b1300';
-      mG.forEach((b, i) => { if (nG[i] && b.base - b.y > 16) ctx.fillText(nG[i], b.x, (b.y + b.base) / 2); });
-      // supply total written vertically beside each point of the azure line, in the gap next to the bar
-      ctx.font = `800 14px ${c.font}`; ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.fillStyle = SKY; ctx.textBaseline = 'middle';
+      mG.forEach((b, i) => { if (nG[i] && b.base - b.y > 16) ctx.fillText(nG[i], b.x + shift(i), (b.y + b.base) / 2); });
+      // supply total written vertically just above each dot of the azure line
+      ctx.font = `800 14px ${c.font}`; ctx.lineWidth = 5; ctx.strokeStyle = '#fff'; ctx.fillStyle = SKY; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
       line.forEach((pt, i) => {
-        const dx = (mE[i].width || 40) / 2 + 9, t = `${active[i]} in fornitura`;
-        ctx.save(); ctx.translate(pt.x + dx, pt.y); ctx.rotate(-Math.PI / 2);
-        const room = pt.y - chart.chartArea.top;                        // write upwards if it fits, else downwards
-        ctx.textAlign = room > ctx.measureText(t).width + 6 ? 'left' : 'right';
+        const t = `${active[i]} in fornitura`;
+        ctx.save(); ctx.translate(pt.x, pt.y - 12); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'left';
         ctx.strokeText(t, 0, 0); ctx.fillText(t, 0, 0); ctx.restore();
       });
       ctx.restore();
