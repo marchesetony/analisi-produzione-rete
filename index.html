@@ -779,6 +779,10 @@ function render() {
       ${exitBox(keys)}
       <button type="button" class="primary pdf" id="pdfBtn">Stampa PDF</button>
     </div>
+    ${S.selMonths.size > 1 ? `<section class="card" id="growthCard">
+      <div class="card-head"><div><h2>📈 Crescita mese per mese</h2><p>Colonne: punti validati nel mese (🔵 luce, 🟠 gas). Linea: punti in fornitura a fine mese, al netto degli usciti.</p></div></div>
+      <div class="chartbox" id="cbGr"><canvas id="chGr" role="img" aria-label="Crescita mensile dei punti validati e in fornitura"></canvas></div>
+    </section>` : ''}
 
     <div class="kpis">
       <div class="kpi kv"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span></div>
@@ -1152,6 +1156,37 @@ function buildEntities(vrows) {
 
 // ---------- chart ----------
 function tok(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+// Growth chart (several months): validated points per month as stacked bars, points in supply at month end as a line.
+function drawGrowth(months, keys, c) {
+  const V = S.rows.filter(r => !r.excluded && isValid(r) && (!keys || keys.has(r.akey)));
+  const gone = storniList(keys);
+  const nE = months.map(m => V.filter(r => r.vmonth === m && r.com === 'ELE').length);
+  const nG = months.map(m => V.filter(r => r.vmonth === m && r.com === 'GAS').length);
+  const active = months.map(m => {
+    const [y, mo] = m.split('-').map(Number), end = Date.UTC(y, mo, 0, 23, 59);
+    const out = new Set(gone.filter(x => x.month <= m).map(x => x.code));
+    return V.filter(r => r.start && r.start.getTime() <= end && !(r.end && r.end.getTime() <= end) && !out.has(r.code)).length;
+  });
+  $('cbGr').style.height = '300px';
+  S.charts.push(new Chart($('chGr'), {
+    data: { labels: months.map(monthLabel), datasets: [
+      { type: 'line', label: 'In fornitura a fine mese', data: active, borderColor: c.ink, backgroundColor: c.ink, borderWidth: 2.5, pointRadius: 4, tension: .25, order: 0 },
+      { type: 'bar', label: 'Validati luce', data: nE, backgroundColor: c.ele, stack: 'v', borderRadius: 3, maxBarThickness: 46, order: 1 },
+      { type: 'bar', label: 'Validati gas', data: nG, backgroundColor: c.gas, stack: 'v', borderRadius: 3, maxBarThickness: 46, order: 1 },
+    ] },
+    options: { responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 20 } },
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } } },
+      scales: { x: { stacked: true, grid: { display: false } }, y: { stacked: true, beginAtZero: true, grace: '10%', grid: { color: c.grid }, ticks: { precision: 0 }, title: { display: true, text: 'Punti' } } } },
+    plugins: [{ id: 'grLabels', afterDatasetsDraw(chart) {
+      const { ctx } = chart; ctx.save(); ctx.font = `700 12px ${c.font}`; ctx.textAlign = 'center';
+      const top = chart.getDatasetMeta(2).data, line = chart.getDatasetMeta(0).data;
+      top.forEach((b, i) => { ctx.fillStyle = c.ink2; ctx.textBaseline = 'bottom'; ctx.fillText(nE[i] + nG[i], b.x, b.y - 3); });
+      line.forEach((pt, i) => { ctx.fillStyle = c.ink; ctx.textBaseline = 'bottom'; ctx.fillText(active[i], pt.x, pt.y - 7); });
+      ctx.restore();
+    } }]
+  }));
+}
 function drawCharts() {
   if (typeof Chart === 'undefined') return;
   const ink = tok('--ink'), ink2 = tok('--ink-2'), grid = tok('--line'), font = tok('--f-body'), surface = tok('--surface');
@@ -1163,6 +1198,7 @@ function drawCharts() {
   const per = (mk, com, f) => V.filter(r => r.vmonth === mk && r.com === com).reduce((s, r) => s + r[f], 0);
   const kwh = months.map(m => per(m, 'ELE', 'kwh')), smc = months.map(m => per(m, 'GAS', 'smc'));
   const labels = months.map(monthLabel);
+  if ($('chGr')) drawGrowth(months, keys, { ink, ink2, grid, font, ele, gas, surface });
   const isLight = hex => { const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})/i.exec(hex || ''); if (!m) return false; const [r, g, b] = m.slice(1).map(x => parseInt(x, 16)); return 0.299 * r + 0.587 * g + 0.114 * b > 170; };
   const valueLabels = { id: 'valueLabels', afterDatasetsDraw(chart) {
     const { ctx } = chart;
