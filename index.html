@@ -32,6 +32,7 @@
   --ele: #2a78d6; --ele-soft: #e3eefb; --gas: #eb6834; --gas-soft: #fdebe3;
   --tot: #15803d; --tot-soft: #e2f3e8; --warn: #b77900; --warn-soft: #fbf1dc; --bad: #c93b33; --bad-soft: #f8e3e1; --other: #9aa3b0;
   --k-in: #b45309; --k-in-soft: #fdf0e1; --k-cum: #6d4fd0; --k-cum-soft: #efeafd;
+  --k-next: #0369a1; --k-next-soft: #e3f1fb;
   --t-sw: #15803d; --t-sw-soft: #e8f6ed; --t-scv: #be185d; --t-scv-soft: #fdeaf3; --t-sub: #a16207; --t-sub-soft: #fdf6d8; --t-vol: #0e7490; --t-vol-soft: #e2f5f9; --t-wb: #57534e; --t-wb-soft: #f1f0ee;
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
@@ -44,6 +45,7 @@
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
   --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
+  --k-next: #5ab4e8; --k-next-soft: #10283a;
   --t-sw: #3ec27a; --t-sw-soft: #15301f; --t-scv: #f06aa8; --t-scv-soft: #3a1828; --t-sub: #e3b341; --t-sub-soft: #352b10; --t-vol: #3fbfd8; --t-vol-soft: #10303a; --t-wb: #b5ada6; --t-wb-soft: #2a2826;
   color-scheme: dark; } }
 :root[data-theme="dark"] {
@@ -53,6 +55,7 @@
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
   --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
+  --k-next: #5ab4e8; --k-next-soft: #10283a;
   --t-sw: #3ec27a; --t-sw-soft: #15301f; --t-scv: #f06aa8; --t-scv-soft: #3a1828; --t-sub: #e3b341; --t-sub-soft: #352b10; --t-vol: #3fbfd8; --t-vol-soft: #10303a; --t-wb: #b5ada6; --t-wb-soft: #2a2826;
   color-scheme: dark;
 }
@@ -137,7 +140,7 @@ body.printing .layout { display: block; }
 body.printing .report { width: 1000px; }
 body.printing .tablewrap { max-height: none !important; overflow: visible !important; }
 body.printing .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-body.printing .kpi { grid-column: span 2; } body.printing .kpi.sup-k { grid-column: span 3; }
+body.printing .kpi, body.printing .kpi.sup-k { grid-column: span 2; }
 body.printing .charts { grid-template-columns: 1fr 1fr !important; }
 td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
 .warnbox { background: var(--warn-soft); color: var(--ink); border-radius: var(--r); padding: 10px 14px; font-size: .88rem; }
@@ -152,7 +155,8 @@ td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
 .kpi.kv { border-color: var(--accent); background: var(--accent-soft); }
 .kpi.ele { border-color: var(--ele); background: var(--ele-soft); }
 .kpi.gas { border-color: var(--gas); background: var(--gas-soft); }
-.kpi.sup-k { grid-column: span 3; }
+.kpi.sup-k { grid-column: span 2; }
+.kpi.sup-next { border-color: var(--k-next); background: var(--k-next-soft); border-style: dashed; border-top-style: solid; }
 .kpi.sup-in { border-color: var(--k-in); background: var(--k-in-soft); }
 .kpi.sup-cum { border-color: var(--k-cum); background: var(--k-cum-soft); }
 .kpi.mix { grid-column: 1 / -1; border-color: var(--ink-2); background: var(--surface-2); }
@@ -821,8 +825,9 @@ function supplyTiles(keys) {
   const kinds = rs => { const q = rs.filter(isQuick).length; return [rs.length - q ? `${rs.length - q} switch` : '', q ? `${q} voltura/sub.` : ''].filter(Boolean).join(' · ') || '–'; };
   const tile = (title, rs, cls) => `<div class="kpi sup-k ${cls}"><span class="lab">${title}</span><span class="val">${fmt(rs.length)} <small style="font-size:.9rem">punti</small></span><span class="sub">${volTxt(rs)}</span><span class="sub">${kinds(rs)}</span></div>`;
   const a = mk => (/^[AEIOU]/.test(monthLabel(mk)) ? 'ad ' : 'a ') + monthLabel(mk);
-  const per = months.length > 1 ? 'nel periodo' : a(last);
-  return tile(`⚡ Entrano in fornitura ${per}`, pts.filter(r => S.selMonths.has(monthKey(r.start))), 'sup-in')
+  const next = monthKey(new Date(Date.UTC(ly, lm, 1)));   // month after the last one analysed
+  return tile(`⚡ Entrano in fornitura ${a(last)}`, pts.filter(r => monthKey(r.start) === last), 'sup-in')
+    + tile(`⏭️ Entrano in fornitura ${a(next)}`, pts.filter(r => monthKey(r.start) === next), 'sup-next')
     + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)), 'sup-cum');
 }
 // "123456 kWh · 789 Smc" for a set of points (only the units present)
