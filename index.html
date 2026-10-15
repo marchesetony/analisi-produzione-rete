@@ -32,7 +32,7 @@
   --ele: #2a78d6; --ele-soft: #e3eefb; --gas: #eb6834; --gas-soft: #fdebe3;
   --tot: #15803d; --tot-soft: #e2f3e8; --warn: #b77900; --warn-soft: #fbf1dc; --bad: #c93b33; --bad-soft: #f8e3e1; --other: #9aa3b0;
   --k-in: #b45309; --k-in-soft: #fdf0e1; --k-cum: #6d4fd0; --k-cum-soft: #efeafd;
-  --k-next: #0369a1; --k-next-soft: #e3f1fb;
+  --k-next: #0369a1; --k-next-soft: #e3f1fb; --k-exit: #475569; --k-exit-soft: #eef1f5;
   --t-sw: #15803d; --t-sw-soft: #e8f6ed; --t-scv: #be185d; --t-scv-soft: #fdeaf3; --t-sub: #a16207; --t-sub-soft: #fdf6d8; --t-vol: #0e7490; --t-vol-soft: #e2f5f9; --t-wb: #57534e; --t-wb-soft: #f1f0ee;
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
@@ -45,7 +45,7 @@
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
   --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
-  --k-next: #5ab4e8; --k-next-soft: #10283a;
+  --k-next: #5ab4e8; --k-next-soft: #10283a; --k-exit: #a3b1c4; --k-exit-soft: #1f2631;
   --t-sw: #3ec27a; --t-sw-soft: #15301f; --t-scv: #f06aa8; --t-scv-soft: #3a1828; --t-sub: #e3b341; --t-sub-soft: #352b10; --t-vol: #3fbfd8; --t-vol-soft: #10303a; --t-wb: #b5ada6; --t-wb-soft: #2a2826;
   color-scheme: dark; } }
 :root[data-theme="dark"] {
@@ -55,7 +55,7 @@
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
   --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
-  --k-next: #5ab4e8; --k-next-soft: #10283a;
+  --k-next: #5ab4e8; --k-next-soft: #10283a; --k-exit: #a3b1c4; --k-exit-soft: #1f2631;
   --t-sw: #3ec27a; --t-sw-soft: #15301f; --t-scv: #f06aa8; --t-scv-soft: #3a1828; --t-sub: #e3b341; --t-sub-soft: #352b10; --t-vol: #3fbfd8; --t-vol-soft: #10303a; --t-wb: #b5ada6; --t-wb-soft: #2a2826;
   color-scheme: dark;
 }
@@ -132,6 +132,11 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .swatches { display: flex; align-items: center; gap: 6px; }
 .sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
 .sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.exitbox { border: 2px solid var(--k-exit); background: var(--k-exit-soft); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 1px; min-width: 150px; align-self: center; }
+.exitbox .lbl { color: var(--k-exit) !important; }
+.exitbox .ex-tot { font-family: var(--f-display); font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.exitbox .ex-tot small { font-size: .85rem; }
+.exitbox .ex-sub { font-size: .8rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .scope-head .pdf { margin-left: auto; align-self: center; }
 .scope-head .big small { font-size: .95rem; font-weight: 500; color: var(--ink-2); }
 /* PDF capture: fixed desktop width, no sidebar */
@@ -751,6 +756,7 @@ function render() {
     <div class="scope-head">
       <div><span class="lbl">Agente</span><span class="big">${agentTxt}</span></div>
       <div><span class="lbl">Mese di riferimento</span><span class="big months">${esc(monthsTxt)}</span></div>
+      ${exitBox(keys)}
       <button type="button" class="primary pdf" id="pdfBtn">Stampa PDF</button>
     </div>
 
@@ -759,7 +765,6 @@ function render() {
       <div class="kpi ele"><span class="lab">🔵 Luce validati</span><span class="val">${fmt(T.vk)} <small style="font-size:.9rem">kWh</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'ELE').length)} contratti</span></div>
       <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
       ${supplyTiles(keys)}
-      ${exitTile(keys)}
       ${mixTile(vrows)}
     </div>
 
@@ -826,17 +831,18 @@ function storniList(keys) {
   }
   return [...seen.values()].filter(x => !keys || keys.has(x.akey));
 }
-function exitTile(keys) {
+function exitBox(keys) {
   if (!S.statini.some(st => st.storni)) return '';
   const months = [...S.selMonths].sort(), last = months[months.length - 1];
   const all = storniList(keys).filter(x => x.month <= last);
   const byMonth = new Map(); all.forEach(x => byMonth.set(x.month, [...(byMonth.get(x.month) || []), x]));
   const rows = [...byMonth].sort(([a], [b]) => b.localeCompare(a));
-  return `<div class="kpi exit"><div class="row between" style="gap:8px 16px"><span class="lab">🚪 POD e PDR usciti (stornati negli statini)</span>
-      <span class="mbadge alert">Totale fino ${(/^[AEIOU]/.test(monthLabel(last)) ? 'ad ' : 'a ') + monthLabel(last)} <b>${all.length}</b> · ${volTxt(all)}</span></div>
-    ${rows.length ? `<div class="exit-grid">${rows.map(([mk, xs]) => `<div class="exit-i ${S.selMonths.has(mk) ? 'cur' : ''}"><span class="mix-t">${monthLabel(mk)}</span><span class="mix-n">${xs.length} <small>${xs.length === 1 ? 'punto' : 'punti'}</small></span><span class="sub">${volTxt(xs)}</span></div>`).join('')}</div>`
-      : '<span class="sub">Nessuno storno negli statini in memoria per questi agenti.</span>'}
-    <span class="sub">Si tolgono solo dal totale generale (📈 In fornitura), non dai numeri del mese. Calcolati dagli statini caricati.</span></div>`;
+  return `<div class="exitbox" title="POD e PDR stornati negli statini caricati. Si tolgono solo dal totale in fornitura.">
+    <span class="lbl">🚪 Usciti fino ${(/^[AEIOU]/.test(monthLabel(last)) ? 'ad ' : 'a ') + MESI[+last.slice(5) - 1]}</span>
+    <span class="ex-tot">${all.length} <small>punti</small></span>
+    <span class="ex-sub">${all.length ? volTxt(all) : 'nessuno storno'}</span>
+    ${rows.length ? `<span class="ex-sub">${rows.map(([mk, xs]) => `${MESI_BREVI[+mk.slice(5) - 1]} ${xs.length}`).join(' · ')}</span>` : ''}
+  </div>`;
 }
 // Validated points by contract type, with each type's weight on the total and compared with the switches.
 function mixTile(vrows) {
@@ -869,11 +875,10 @@ function supplyTiles(keys) {
   const kinds = rs => { const q = rs.filter(isQuick).length; return [rs.length - q ? `${rs.length - q} switch` : '', q ? `${q} voltura/sub.` : ''].filter(Boolean).join(' · ') || '–'; };
   const tile = (title, rs, cls, note = '') => `<div class="kpi sup-k ${cls}"><span class="lab">${title}</span><span class="val">${fmt(rs.length)} <small style="font-size:.9rem">punti</small></span><span class="sub">${volTxt(rs)}</span><span class="sub">${kinds(rs)}</span>${note ? `<span class="sub" style="color:var(--bad)">${note}</span>` : ''}</div>`;
   const gone = new Set(storniList(keys).filter(x => x.month <= last).map(x => x.code));
-  const goneRows = pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod) && gone.has(r.code));
   const a = mk => (/^[AEIOU]/.test(monthLabel(mk)) ? 'ad ' : 'a ') + monthLabel(mk);
   const next = monthKey(new Date(Date.UTC(ly, lm, 1)));   // month after the last one analysed
   return tile(`⚡ Entrano in fornitura ${a(last)}`, pts.filter(r => monthKey(r.start) === last), 'sup-in')
-    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod) && !gone.has(r.code)), 'sup-cum', goneRows.length ? `al netto di ${goneRows.length} usciti: −${volTxt(goneRows).replace(' · ', ' · −')}` : '')
+    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod) && !gone.has(r.code)), 'sup-cum')
     + tile(`⏭️ Entrano in fornitura ${a(next)}`, pts.filter(r => monthKey(r.start) === next), 'sup-next');
 }
 // "123456 kWh · 789 Smc" for a set of points (only the units present)
