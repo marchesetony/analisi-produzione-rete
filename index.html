@@ -180,6 +180,8 @@ body.printing .kpi.exit { grid-column: 1 / -1; }
 .sim-t.neg .v { color: var(--bad); }
 .sim-t.tot { border-color: var(--tot); background: var(--tot-soft); grid-column: 1 / -1; }
 .sim-t.tot .v { font-size: 2rem; color: var(--tot); }
+.sim-src { font-size: .88rem; color: var(--ink-2); }
+.learn summary { font-weight: 700; }
 .sim-warn { background: var(--warn-soft); border-radius: 8px; padding: 8px 12px; font-size: .9rem; }
 .sim-det summary, .sim-set summary { cursor: pointer; font-weight: 600; }
 .sim-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 8px; font-size: .88rem; }
@@ -861,13 +863,11 @@ function exitBox(keys) {
 }
 // ---------- compensation simulation (area manager) ----------
 // Listino BPower dal 1/8/2026. Una riga: chiave CTE | POD o PDR | consumo da | consumo a | gettone € | pagamento (sdd / nosdd, facoltativo)
+// Gli statini di agosto 2026 pagano il gettone pieno anche con bollettino (la trattenuta è una maggiorazione a parte): non SDD = 100%.
 // La prima riga che corrisponde vince. "*" = qualsiasi CTE. Gettone vuoto o "spread" = da concordare (non calcolato).
 const DEFAULT_LISTINO = `# Residenziale luce
-casa protetta | POD | 1500 | | 60 | nosdd
-casa protetta | POD | 0 | 1500 | 40 | nosdd
 casa protetta | POD | 1500 | | 75
 casa protetta | POD | 0 | 1500 | 50
-family fast | POD | 0 | | 40 | nosdd
 family fast | POD | 0 | | 60
 porta un amico | POD | 0 | | 40
 fix family | POD | 1000 | | 75
@@ -918,7 +918,7 @@ strong gas | PDR | 20000 | 40000 | 300
 # Piano residenziale per i business sotto 3500 kWh
 * | POD | 1500 | 3500 | 75
 * | POD | 0 | 1500 | 50`;
-const SIM_DEFAULT = { am: '', pctCoord: 20, pctSub: 10, perBill: 1, perMwh: 1, contrib: 0, noSdd: 60, listino: DEFAULT_LISTINO };
+const SIM_DEFAULT = { am: '', pctCoord: 20, pctSub: 10, perBill: 1, perMwh: 1, contrib: 0, noSdd: 100, validFrom: '2026-08', listino: DEFAULT_LISTINO };
 S.sim = { ...SIM_DEFAULT, ...(store.get('ac.sim') || {}) };
 const saveSim = () => store.set('ac.sim', S.sim);
 function parseListino(text) {
@@ -928,6 +928,8 @@ function parseListino(text) {
   });
 }
 // gettone of one point: { eur, note }
+// gettone actually paid per point, from every statino in memory
+const PAID = () => { const m = new Map(); S.statini.forEach(st => Object.entries(st.paid || {}).forEach(([c, v]) => m.set(c, v))); return m; };
 function gettoneOf(r, L) {
   const vol = r.com === 'GAS' ? r.smc : r.kwh, cte = norm(r.cte);
   for (const x of L) {
@@ -935,9 +937,9 @@ function gettoneOf(r, L) {
     if (x.key !== '*' && !cte.includes(x.key)) continue;
     if (x.pay === 'nosdd' && r.sdd) continue;
     if (x.pay === 'sdd' && !r.sdd) continue;
-    if (x.g == null) return { eur: 0, note: 'da concordare (spread o prezzo dedicato)' };
+    if (x.g == null) return { eur: 0, note: 'da concordare (spread o prezzo dedicato)', line: x };
     const eur = !r.sdd && !x.pay ? x.g * S.sim.noSdd / 100 : x.g;
-    return { eur, note: !r.sdd && !x.pay ? `non SDD: ${S.sim.noSdd}%` : '' };
+    return { eur, note: !r.sdd && !x.pay ? `non SDD: ${S.sim.noSdd}%` : '', line: x };
   }
   return { eur: 0, note: (r.com === 'GAS' ? r.smc : r.kwh) > 350000 ? 'oltre soglia: 10% dello spread' : 'CTE o fascia non nel listino' };
 }
@@ -954,14 +956,16 @@ function simulate() {
   const L = parseListino(S.sim.listino);
   const months = [...S.selMonths].sort();
   const pct = { own: 100, coord: S.sim.pctCoord, sub: S.sim.pctSub };
-  const res = { amKey, months, lines: { own: [0, 0, 0], coord: [0, 0, 0], sub: [0, 0, 0] }, byAgent: new Map(), missing: [], bills: 0, mwh: 0, storni: 0, stCount: 0, contrib: 0, perMonth: [] };
+  const res = { amKey, months, lines: { own: [0, 0, 0], coord: [0, 0, 0], sub: [0, 0, 0] }, byAgent: new Map(), missing: [], bills: 0, mwh: 0, storni: 0, stCount: 0, contrib: 0, perMonth: [], fromStatino: 0, fromListino: 0, estQuota: 0, estList: [] };
   const stAll = storniList(null);
   for (const mk of months) {
     const pm = { mk, override: 0, own: 0, bills: 0, mwh: 0, storni: 0 };
     for (const r of S.rows) {
       if (r.vmonth !== mk || r.excluded || !isValid(r)) continue;
       const role = roleOf(r, amKey); if (!role) continue;
-      const g = gettoneOf(r, L), quota = g.eur * pct[role] / 100;
+      const paidEur = PAID().get(r.code);
+      const g = paidEur != null ? { eur: paidEur, note: 'da statino' } : gettoneOf(r, L), quota = g.eur * pct[role] / 100;
+      if (paidEur != null) res.fromStatino++; else { res.fromListino++; if (role !== 'own') { res.estQuota += quota; res.estList.push(r); } }
       const ln = res.lines[role]; ln[0]++; ln[1] += g.eur; ln[2] += quota;
       if (role === 'own') pm.own += quota; else pm.override += quota;
       const a = res.byAgent.get(r.akey) || { name: r.agent, role, n: 0, base: 0, quota: 0, miss: 0 };
@@ -981,7 +985,8 @@ function simulate() {
     // reversals of the month on points of his network: the percentage paid is taken back
     for (const x of stAll.filter(x => x.month === mk && x.r)) {
       const role = roleOf(x.r, amKey); if (!role || role === 'own') continue;
-      pm.storni += gettoneOf(x.r, L).eur * pct[role] / 100; res.stCount++;
+      // the statino states the agent's reversed amount: the manager loses his percentage of it
+      pm.storni += (x.amount ? Math.abs(x.amount) : gettoneOf(x.r, L).eur) * pct[role] / 100; res.stCount++;
     }
     res.bills += pm.bills; res.mwh += pm.mwh; res.storni += pm.storni;
     pm.ric = pm.bills * S.sim.perBill + pm.mwh * S.sim.perMwh;
@@ -1005,7 +1010,7 @@ function simCard() {
   const roleTxt = { own: 'propri', coord: `coordinatore ${S.sim.pctCoord}%`, sub: `sub-agente ${S.sim.pctSub}%` };
   const amOpts = [...S.agents].filter(a => a.subs.size).sort((a, b) => b.subs.size - a.subs.size).map(a => `<option value="${esc(a.key)}" ${a.key === R.amKey ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
   return `<section class="card" id="simCard">
-    <div class="card-head"><div><h2>💶 Simulazione compenso · ${esc(am?.name || '')}</h2><p>${esc(monthsList(S.selMonths))} · stima su punti validati, listino gettoni BPower e tue percentuali. Il ricorrente usa il portafoglio del mese precedente.</p></div>
+    <div class="card-head"><div><h2>💶 Simulazione compenso · ${esc(am?.name || '')}</h2><p>${esc(monthsList(S.selMonths))} · percentuali solo sui gettoni pagati agli agenti (esclusi premi, gare e plus): importo reale dagli statini, altrimenti dal listino BPower. Il ricorrente usa il portafoglio del mese precedente.</p></div>
       <button type="button" class="pdf-btn" data-pdf="simCard">PDF simulazione</button></div>
     <div class="sim-grid">
       ${tile(`Coordinatori ${S.sim.pctCoord}%`, eur(R.lines.coord[2]), `${R.lines.coord[0]} punti · gettoni ${eur(R.lines.coord[1])}`)}
@@ -1022,7 +1027,10 @@ function simCard() {
         ['Ricorrente', sumBy(/^ricorrente/i), R.ricBills + R.ricMwh], ['Storni', sumBy(/storno/i), -R.storni], ['Gettoni propri', sumBy(/^gettone$/i), R.lines.own[2]]];
       return `<div class="tablewrap"><table><thead><tr><th>Confronto con lo statino</th><th class="num">Statino</th><th class="num">Simulazione</th><th class="num">Differenza</th></tr></thead>
         <tbody>${cmp.filter(([, a, b]) => a || b).map(([l, a, b]) => `<tr><td>${l}</td><td class="num">${eur(a)}</td><td class="num">${eur(b)}</td><td class="num">${eur(b - a)}</td></tr>`).join('')}
-        <tr class="total"><td>Totale</td><td class="num">${eur(statTot)}</td><td class="num">${eur(R.total)}</td><td class="num">${eur(R.total - statTot)}</td></tr></tbody></table></div>`; })() : ''}
+        <tr class="total"><td>Totale</td><td class="num">${eur(statTot)}</td><td class="num">${eur(R.total)}</td><td class="num">${eur(R.total - statTot)}</td></tr></tbody></table></div>
+        ${R.estQuota ? `<div class="sim-src">Di cui <b>${eur(R.estQuota)}</b> su ${R.estList.length} punti validati che non risultano pagati negli statini (stimati dal listino): ${R.estList.map(r => esc(`${r.agent} ${r.id}`)).join(', ')}. Se nei prossimi statini non arrivano, sono da segnalare a BPower.</div>` : ''}`; })() : ''}
+    <div class="sim-src">Gettoni usati: <b>${R.fromStatino}</b> presi dagli statini (importo reale) · <b>${R.fromListino}</b> stimati dal listino.</div>
+    ${learnPanel()}
     ${R.missing.length ? `<div class="sim-warn">⚠️ ${R.missing.length} punti senza gettone calcolato (non contati): ${esc([...new Set(R.missing.map(m => `${m.r.cte || 'CTE vuota'} – ${m.note}`))].slice(0, 6).join('; '))}${R.missing.length > 6 ? '…' : ''}</div>` : ''}
     ${R.months.length > 1 ? `<details class="sim-det"><summary>Per mese</summary><div class="tablewrap"><table>
       <thead><tr><th>Mese</th><th class="num">Percentuali</th><th class="num">Propri</th><th class="num">Ricorrente</th><th class="num">Storni</th><th class="num">Totale</th></tr></thead>
@@ -1037,6 +1045,7 @@ function simCard() {
         <label>% sub-agenti <input type="text" inputmode="decimal" id="simPs" data-sim="pctSub" value="${S.sim.pctSub}"></label>
         <label>€ per bolletta <input type="text" inputmode="decimal" id="simPb" data-sim="perBill" value="${S.sim.perBill}"></label>
         <label>€ per MWh (solo luce) <input type="text" inputmode="decimal" id="simPm" data-sim="perMwh" value="${S.sim.perMwh}"></label>
+        <label>Listino valido da (AAAA-MM) <input type="text" id="simVf" data-sim="validFrom" value="${S.sim.validFrom}"></label>
         <label>% gettone se non SDD <input type="text" inputmode="decimal" id="simNs" data-sim="noSdd" value="${S.sim.noSdd}"></label>
       </div>
       <label class="small" style="display:block;margin-top:8px">Listino gettoni: chiave CTE | POD/PDR | consumo da | consumo a | gettone € | sdd/nosdd (facoltativo)
@@ -1044,6 +1053,31 @@ function simCard() {
       <div class="row"><button type="button" id="simReset">Ripristina listino BPower agosto 2026</button></div>
     </details>
   </section>`;
+}
+// Compare listino vs paid gettone on every point found in the statini; mismatches grouped by CTE / band / amounts.
+function learnPanel() {
+  // only statini paid under the current listino (older months used a different one)
+  const paid = new Map(); S.statini.filter(st => st.prod >= S.sim.validFrom).forEach(st => Object.entries(st.paid || {}).forEach(([c, v]) => paid.set(c, v)));
+  if (!paid.size) return `<div class="sim-src">🔍 Per la verifica del listino carica statini da ${monthLabel(S.sim.validFrom)} in poi (listino valido da quel mese).</div>`;
+  const L = parseListino(S.sim.listino);
+  const byCode = new Map(); S.rows.forEach(r => { if (r.code && !byCode.has(r.code)) byCode.set(r.code, r); });
+  const groups = new Map(); let ok = 0, n = 0;
+  for (const [code, eurPaid] of paid) {
+    const r = byCode.get(code); if (!r) continue;
+    const g = gettoneOf(r, L); n++;
+    if (Math.abs(g.eur - eurPaid) < 0.5) { ok++; continue; }
+    const vol = r.com === 'GAS' ? r.smc : r.kwh;
+    const k = [norm(r.cte), r.com, g.line ? `${g.line.da}|${g.line.a === Infinity ? '' : g.line.a}` : `${Math.floor(vol)}|${Math.floor(vol)}`, g.eur, eurPaid, r.sdd ? '' : 'nosdd'].join('§');
+    const x = groups.get(k) || { cte: r.cte || '(vuota)', com: r.com, line: g.line, pred: g.eur, paid: eurPaid, sdd: r.sdd, n: 0, codes: [] };
+    x.n++; x.codes.push(code); groups.set(k, x);
+  }
+  const list = [...groups.values()].sort((a, b) => b.n - a.n);
+  S.learn = list;
+  return `<details class="sim-det learn" ${list.length ? 'open' : ''}><summary>🔍 Verifica listino sugli statini: ${ok} gettoni su ${n} coincidono${list.length ? ` · <b style="color:var(--bad)">${n - ok} diversi</b>` : ' ✅'}</summary>
+    ${list.length ? `<div class="muted small" style="margin:6px 0">Confronto tra gettone del listino e gettone pagato negli statini da ${monthLabel(S.sim.validFrom)} in poi. “Correggi” aggiunge al listino una regola con l'importo pagato, che vale anche per i mesi successivi.</div>
+    <div class="tablewrap"><table><thead><tr><th>CTE</th><th>Fascia</th><th>Pagamento</th><th class="num">Punti</th><th class="num">Listino</th><th class="num">Pagato</th><th></th></tr></thead>
+    <tbody>${list.map((x, i) => `<tr><td>${esc(x.cte)} <span class="muted">${x.com === 'GAS' ? 'PDR' : 'POD'}</span></td><td>${x.line ? `${fmt(x.line.da)}–${x.line.a === Infinity ? 'oltre' : fmt(x.line.a)}` : 'nessuna'}</td><td>${x.sdd ? 'SDD' : 'non SDD'}</td><td class="num">${x.n}</td><td class="num">${eur(x.pred)}</td><td class="num"><b>${eur(x.paid)}</b></td><td><button type="button" data-learn="${i}">Correggi</button></td></tr>`).join('')}</tbody></table></div>` : ''}
+  </details>`;
 }
 // Validated points by contract type, with each type's weight on the total and compared with the switches.
 function mixTile(vrows) {
@@ -1200,13 +1234,16 @@ async function readStatino(file) {
   const prod = monthKey(new Date(Date.UTC(pay.getUTCFullYear(), pay.getUTCMonth() - 1, 1)));
   const name = m[3].replace(/_/g, ' ').trim();
   const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-  const points = new Set(), storni = [], summary = {};
+  const points = new Set(), storni = [], summary = {}, paid = {};
   for (let i = 1; i <= doc.numPages; i++) {
     const tc = await (await doc.getPage(i)).getTextContent();
     const lines = tc.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join('').split('\n');
     // only the new-contract lines ("Gettone 75.0"): recurring, variable and surcharge lines repeat old points
     for (const l of lines) {
-      if (/Gettone\s*\d/i.test(l)) (l.match(POINT_RE) || []).forEach(x => points.add(x));
+      if (/Gettone\s*\d/i.test(l)) {
+        const amt = parseNum((l.match(/Gettone\s*(\d+(?:[.,]\d+)?)/i) || [])[1]);
+        (l.match(POINT_RE) || []).forEach(x => { points.add(x); paid[x] = amt; });
+      }
       const sum = i === 1 && l.trim().match(/^([A-Za-zÀ-ÿ%>.0-9 ]*[A-Za-zÀ-ÿ%])\s+(-?[\d.]+(?:,\d+)?)$/);
       if (sum && !POINT_RE.test(l)) summary[sum[1].trim()] = parseNum(sum[2]);
       POINT_RE.lastIndex = 0;
@@ -1215,7 +1252,7 @@ async function readStatino(file) {
       if (sm && !/Gettone|Ricorrente|Variabile|Maggiorazione/i.test(l)) storni.push({ code: sm[1], amount: parseNum(sm[2]) });
     }
   }
-  return { file: file.name, name, key: nameKey(name), prod, points, storni, summary };
+  return { file: file.name, name, key: nameKey(name), prod, points, storni, summary, paid };
 }
 // Statini stay in this browser's memory (only the parsed points, not the PDFs); new uploads are added to them.
 S.statini = (store.get('ac.statini') || []).map(x => ({ ...x, points: new Set(x.points) }));
@@ -1234,7 +1271,7 @@ async function handleStatini(files) {
     const old = S.statini.find(x => x.key === st.key && x.prod === st.prod);
     if (!old) { S.statini.push(st); added++; }
     else if (sameSet(old.points, st.points) && (!old.storni || sameSet(new Set(old.storni.map(x => x.code)), new Set(st.storni.map(x => x.code))))) {
-      if (!old.storni) { old.storni = st.storni; added++; } else same++;
+      if (!old.storni || !old.paid || !old.summary) { Object.assign(old, { storni: st.storni, paid: st.paid, summary: st.summary }); added++; } else same++;
     }
     else S.stPending.push({ old, neu: st });
   }
@@ -1404,11 +1441,19 @@ async function exportPdf(section) {
 }
 $('report').addEventListener('change', e => {
   const k = e.target.dataset?.sim; if (!k) return;
-  S.sim[k] = ['am', 'listino'].includes(k) ? e.target.value : parseNum(e.target.value);
+  S.sim[k] = ['am', 'listino', 'validFrom'].includes(k) ? e.target.value.trim() : parseNum(e.target.value);
   saveSim(); render();
   document.querySelector('#simCard .sim-set')?.setAttribute('open', '');
 });
 $('report').addEventListener('click', e => {
+  const lb = e.target.closest('[data-learn]');
+  if (lb) {
+    const x = S.learn[+lb.dataset.learn];
+    const da = x.line ? x.line.da : 0, a = x.line && x.line.a !== Infinity ? x.line.a : '';
+    const rule = `${norm(x.cte)} | ${x.com === 'GAS' ? 'PDR' : 'POD'} | ${da} | ${a} | ${x.paid} | ${x.sdd ? 'sdd' : 'nosdd'}`;
+    S.sim.listino = `# Correzione da statino (${new Date().toLocaleDateString('it-IT')})\n${rule}\n` + S.sim.listino;
+    saveSim(); render(); toast('Listino corretto: la regola vale anche per i prossimi mesi'); return;
+  }
   if (e.target.id === 'simReset') { S.sim.listino = DEFAULT_LISTINO; saveSim(); render(); document.querySelector('#simCard .sim-set')?.setAttribute('open', ''); }
   if (e.target.closest('#pdfBtn')) exportPdf();
   const pb = e.target.closest('.pdf-btn'); if (pb) exportPdf(pb.dataset.pdf);
