@@ -1,6 +1,6 @@
 {
-  "name": "Analisi Contratti Agenti",
-  "short_name": "Contratti",
+  "name": "Analisi Produzione Rete",
+  "short_name": "Produzione",
   "description": "Report contratti validati per agente e mese, con verifica statini.",
   "lang": "it",
   "start_url": "./",
