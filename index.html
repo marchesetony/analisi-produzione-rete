@@ -133,10 +133,11 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
 .sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
 .exitbox { border: 2px solid var(--k-exit); background: var(--k-exit-soft); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 1px; min-width: 150px; align-self: center; }
-.exitbox .lbl { color: var(--k-exit) !important; }
-.exitbox .ex-tot { font-family: var(--f-display); font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.exitbox .ex-tot small { font-size: .85rem; }
-.exitbox .ex-sub { font-size: .8rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.exitbox, .exitbox * { font-family: var(--f-body); }
+.exitbox .lbl { color: var(--k-exit) !important; text-transform: none !important; letter-spacing: 0 !important; font-size: .98rem !important; font-weight: 700; }
+.exitbox .ex-tot { font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; color: var(--ink); }
+.exitbox .ex-tot small { font-size: 1rem; font-weight: 600; }
+.exitbox .ex-sub { font-size: .95rem; color: var(--ink); font-variant-numeric: tabular-nums; }
 .scope-head .pdf { margin-left: auto; align-self: center; }
 .scope-head .big small { font-size: .95rem; font-weight: 500; color: var(--ink-2); }
 /* PDF capture: fixed desktop width, no sidebar */
@@ -771,10 +772,6 @@ function render() {
     <section class="card">
       <div class="card-head"><div><h2>🎯 Contratti validati</h2></div>
         <button type="button" data-copy="t2">Copia tabella</button></div>
-      ${vIn.length || vOut.length ? `<div class="ruleinfo">
-        ${vIn.length ? `<div>➕ <b>${fmt(vIn.length)}</b> (${volTxt(vIn)}) inseriti in mesi precedenti e chiusi dopo il ${S.cutoff}: inclusi qui (${esc(listMonths(vIn))}).</div>` : ''}
-        ${vOut.length ? `<div>➡️ <b>${fmt(vOut.length)}</b> (${volTxt(vOut)}) inseriti in questo periodo ma chiusi dopo il ${S.cutoff}: vanno in ${esc(listV(vOut))}.</div>` : ''}
-      </div>` : ''}
       <div class="tablewrap"><table id="t2">
         <thead><tr><th>Commodity</th><th>Tipo Cliente</th><th class="num">N° Contratti</th><th class="num">🔵 kWh Annui</th><th class="num">🟠 Smc Annui</th></tr></thead>
         <tbody>${t2.map(x => `<tr><td>${comCell(x.com)}</td><td>${esc(x.cl)}</td><td class="num">${fmt(x.n)}</td><td class="num">${x.com === 'ELE' ? fmt(x.kwh) + ' kWh' : '–'}</td><td class="num">${x.com === 'GAS' ? fmt(x.smc) + ' Smc' : '–'}</td></tr>`).join('')}
