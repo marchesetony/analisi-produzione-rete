@@ -827,8 +827,8 @@ function supplyTiles(keys) {
   const a = mk => (/^[AEIOU]/.test(monthLabel(mk)) ? 'ad ' : 'a ') + monthLabel(mk);
   const next = monthKey(new Date(Date.UTC(ly, lm, 1)));   // month after the last one analysed
   return tile(`⚡ Entrano in fornitura ${a(last)}`, pts.filter(r => monthKey(r.start) === last), 'sup-in')
-    + tile(`⏭️ Entrano in fornitura ${a(next)}`, pts.filter(r => monthKey(r.start) === next), 'sup-next')
-    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)), 'sup-cum');
+    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)), 'sup-cum')
+    + tile(`⏭️ Entrano in fornitura ${a(next)}`, pts.filter(r => monthKey(r.start) === next), 'sup-next');
 }
 // "123456 kWh · 789 Smc" for a set of points (only the units present)
 function volTxt(rs) {
