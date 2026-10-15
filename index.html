@@ -1567,7 +1567,15 @@ loadSample();
 </script>
 
 <script>
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+// version shown in the header, so it is easy to see which one is open
+window.APP_VERSION = '15/10/2026 18:43';
+document.addEventListener('DOMContentLoaded', () => { const p = document.querySelector('.top p'); if (p) p.insertAdjacentHTML('beforeend', ` <span style="opacity:.6">· versione ${window.APP_VERSION}</span>`); });
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
+  // a new version took over: reload once to show it
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!reloaded) { reloaded = true; location.reload(); } });
+}
 </script>
 </body>
 </html>
