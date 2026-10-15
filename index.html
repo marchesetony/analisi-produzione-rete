@@ -111,6 +111,7 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
 .kpi.sup-k { border-top: 3px solid var(--accent); }
+.dup { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: var(--r); padding: 10px; display: flex; flex-direction: column; gap: 4px; color: var(--ink); word-break: break-word; }
 .disclaimer { margin: 4px 2px 0; font-size: .8rem; color: var(--muted); font-style: italic; }
 .sup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .sup { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
@@ -226,9 +227,10 @@ tr.sum-si td.si { color: var(--tot); font-weight: 700; }
         <label class="file-drop" id="stDrop">
           <input type="file" id="stInput" accept=".pdf" multiple>
           <strong>Carica gli statini PDF</strong>
-          <span class="muted">Anche più file insieme. Il nome deve essere come “Statino_09_2026_Nome_Agente.pdf”.</span>
+          <span class="muted">Restano in memoria su questo dispositivo: aggiungi solo i nuovi. Nome come “Statino_09_2026_Nome_Agente.pdf”.</span>
         </label>
         <div id="stInfo" class="muted small"></div>
+        <div id="stPending" style="display:flex;flex-direction:column;gap:8px"></div>
       </section>
 
       <details class="panel" id="mapPanel">
@@ -743,6 +745,7 @@ function render() {
       </table></div>` : '<p class="muted" style="margin:0">Tutti i contratti inseriti nel periodo hanno passato i controlli.</p>'}
     </section>
     ${statiniCard()}
+    ${pointsCard(vrows)}
     <p class="disclaimer">Salvo errori e omissioni.</p>`).replaceAll('🟠', gasDot());
   drawCharts();
 }
@@ -766,6 +769,18 @@ function supplyTiles(keys) {
 function volTxt(rs) {
   const k = rs.reduce((s, r) => s + (r.com === 'ELE' ? r.kwh : 0), 0), g = rs.reduce((s, r) => s + (r.com === 'GAS' ? r.smc : 0), 0);
   return [k ? `${fmt(k)} kWh` : '', g ? `${fmt(g)} Smc` : ''].filter(Boolean).join(' · ') || '0 kWh';
+}
+// Every validated point with its volume, to check the totals one by one.
+function pointsCard(vrows) {
+  if (!vrows.length) return '';
+  const rs = [...vrows].sort((a, b) => a.agent.localeCompare(b.agent, 'it') || a.vmonth.localeCompare(b.vmonth) || (a.firma - b.firma));
+  const f = d => d ? fmtDate(d) : '–';
+  return `<details class="card"><summary style="cursor:pointer"><h2 style="display:inline">Elenco punti validati · ${rs.length}</h2> <span class="muted small">${volTxt(rs)} · tocca per aprire</span></summary>
+    <div class="row" style="justify-content:flex-end"><button type="button" data-copy="tpts">Copia tabella</button></div>
+    <div class="tablewrap tall"><table id="tpts">
+      <thead><tr><th>Agente</th><th>Mese</th><th>ID</th><th>POD / PDR</th><th>Tipologia</th><th>Inserito</th><th>Chiuso</th><th>Attivazione</th><th class="num">Volume</th></tr></thead>
+      <tbody>${rs.map(r => `<tr><td>${esc(r.agent)}</td><td>${monthLabel(r.vmonth)}</td><td>${esc(r.id)}</td><td>${esc(r.code)}</td><td>${esc(r.tipologia)}</td><td>${f(r.firma)}</td><td>${f(r.okDate)}</td><td>${f(r.start)}</td><td class="num">${r.com === 'GAS' ? fmt(r.smc) + ' Smc' : fmt(r.kwh) + ' kWh'}</td></tr>`).join('')}</tbody>
+    </table></div></details>`;
 }
 function aggV(vrows) {
   const a = { n: 0, ne: 0, ng: 0, kwh: 0, smc: 0 };
@@ -861,7 +876,6 @@ function drawCharts() {
 // A statino named Statino_MM_YYYY_Name.pdf pays in month MM the points produced (validated) in month MM-1.
 const nameKey = s => norm(s).replace(/[^a-z]/g, '');
 const POINT_RE = /IT\d{3}E\d{7}[\dA-Z]|(?<!\d)\d{14}(?!\d)/g;
-S.statini = [];
 async function readStatino(file) {
   const m = file.name.match(/statino[_ -]?(\d{1,2})[_ -](\d{4})[_ -](.+?)(?:[-_ ]errata.*|\s*\(\d+\))?\.pdf$/i);
   if (!m) return { file: file.name, error: 'nome file non riconosciuto' };
@@ -878,34 +892,74 @@ async function readStatino(file) {
   }
   return { file: file.name, name, key: nameKey(name), prod, points };
 }
+// Statini stay in this browser's memory (only the parsed points, not the PDFs); new uploads are added to them.
+S.statini = (store.get('ac.statini') || []).map(x => ({ ...x, points: new Set(x.points) }));
+S.stPending = [];   // duplicates waiting for the user's choice: { old, neu }
+const saveStatini = () => store.set('ac.statini', S.statini.map(x => ({ ...x, points: [...x.points] })));
+const sameSet = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
 async function handleStatini(files) {
   if (!window.pdfjsLib) { toast('Lettore PDF non caricato: controlla la connessione'); return; }
-  if (!S.raw.length || S.sample) { toast('Carica prima il file Excel dei contratti'); return; }
   $('stInfo').textContent = 'Leggo gli statini…';
+  let added = 0, same = 0; const bad = [];
   for (const f of files) {
-    try {
-      const st = await readStatino(f);
-      S.statini = S.statini.filter(x => x.file !== st.file).concat(st);
-    } catch (e) { console.error(e); S.statini.push({ file: f.name, error: 'PDF non leggibile' }); }
+    let st;
+    try { st = await readStatino(f); } catch (e) { console.error(e); st = { file: f.name, error: 'PDF non leggibile' }; }
+    if (st.error) { bad.push(`${st.file}: ${st.error}`); continue; }
+    st.loadedAt = new Date().toISOString();
+    const old = S.statini.find(x => x.key === st.key && x.prod === st.prod);
+    if (!old) { S.statini.push(st); added++; }
+    else if (sameSet(old.points, st.points)) same++;
+    else S.stPending.push({ old, neu: st });
   }
-  $('stInfo').innerHTML = `${S.statini.length} statini caricati · <button class="link" type="button" id="stClear">Togli tutti</button>`;
-  render();
-  document.getElementById('statiniCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  saveStatini(); renderStInfo(); render();
+  toast([added ? `${added} statini aggiunti` : '', same ? `${same} già presenti uguali` : '', S.stPending.length ? `${S.stPending.length} duplicati da scegliere` : '', bad.length ? `${bad.length} non letti` : ''].filter(Boolean).join(' · ') || 'Nessun statino nuovo');
+  if (bad.length) console.warn(bad);
+  (S.stPending.length ? $('stPending') : document.getElementById('statiniCard'))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+function renderStInfo() {
+  const list = [...S.statini].sort((a, b) => b.prod.localeCompare(a.prod) || a.name.localeCompare(b.name));
+  $('stInfo').innerHTML = list.length ? `<details><summary style="cursor:pointer"><b>${list.length}</b> statini in memoria</summary>
+    <div style="display:flex;flex-direction:column;gap:2px;margin-top:6px;max-height:220px;overflow-y:auto">
+      ${list.map(x => `<div class="row between" style="gap:6px"><span>${esc(x.name)} · ${monthLabel(x.prod)} <span class="muted">(${x.points.size})</span></span><button class="link" type="button" data-strm="${esc(x.key)}|${x.prod}" aria-label="Togli">Togli</button></div>`).join('')}
+    </div><button class="link" type="button" id="stClear" style="margin-top:6px">Togli tutti</button></details>` : 'Nessun statino in memoria.';
+  const f = (st, other) => { const only = [...st.points].filter(x => !other.points.has(x)); return only.length ? only.map(esc).join(', ') : 'nessuno'; };
+  $('stPending').innerHTML = S.stPending.map((d, i) => `<div class="dup">
+      <b>Statino doppio: ${esc(d.neu.name)} · ${monthLabel(d.neu.prod)}</b>
+      <div class="small">Già in memoria: <i>${esc(d.old.file)}</i> · ${d.old.points.size} punti${d.old.loadedAt ? ` · caricato il ${new Date(d.old.loadedAt).toLocaleDateString('it-IT')}` : ''}</div>
+      <div class="small">Nuovo: <i>${esc(d.neu.file)}</i> · ${d.neu.points.size} punti</div>
+      <div class="small">Solo nel vecchio: ${f(d.old, d.neu)}</div>
+      <div class="small">Solo nel nuovo: ${f(d.neu, d.old)}</div>
+      <div class="row"><button type="button" data-dup="${i}" data-pick="old">Tieni il vecchio</button><button type="button" class="primary" data-dup="${i}" data-pick="new">Usa il nuovo</button></div>
+    </div>`).join('');
+}
+$('stInfo').addEventListener('click', e => {
+  if (e.target.id === 'stClear') { S.statini = []; saveStatini(); renderStInfo(); render(); return; }
+  const k = e.target.dataset?.strm; if (!k) return;
+  const [key, prod] = k.split('|'); S.statini = S.statini.filter(x => !(x.key === key && x.prod === prod));
+  saveStatini(); renderStInfo(); render();
+});
+$('stPending').addEventListener('click', e => {
+  const i = e.target.dataset?.dup; if (i == null) return;
+  const d = S.stPending.splice(+i, 1)[0];
+  if (e.target.dataset.pick === 'new') S.statini = S.statini.filter(x => x !== d.old).concat(d.neu);
+  saveStatini(); renderStInfo(); render();
+});
 $('stInput').addEventListener('change', e => { handleStatini([...e.target.files]); e.target.value = ''; });
 ['dragenter', 'dragover'].forEach(ev => $('stDrop').addEventListener(ev, e => { e.preventDefault(); $('stDrop').classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => $('stDrop').addEventListener(ev, e => { e.preventDefault(); $('stDrop').classList.remove('over'); }));
 $('stDrop').addEventListener('drop', e => handleStatini([...e.dataTransfer.files].filter(f => /\.pdf$/i.test(f.name))));
-$('stInfo').addEventListener('click', e => { if (e.target.id === 'stClear') { S.statini = []; $('stInfo').textContent = ''; render(); } });
+renderStInfo();
 
 function statiniCard() {
-  if (!S.statini.length) return '';
+  const keysSel = scopeKeys(), scopeNames = keysSel ? new Set([...keysSel].map(k => nameKey(agentObj(k)?.name || k))) : null;
+  const shown = S.statini.filter(st => S.selMonths.has(st.prod) && (!scopeNames || scopeNames.has(st.key)));
+  if (!shown.length || !S.raw.length || S.sample) return '';
   const byCode = new Map();
   for (const r of S.rows) if (r.code && !byCode.has(r.code)) byCode.set(r.code, r);
   const paidWhere = new Map();   // point → statini that pay it
   for (const st of S.statini) if (st.points) for (const x of st.points) paidWhere.set(x, [...(paidWhere.get(x) || []), st]);
   const rowsOut = [], summary = [];
-  for (const st of [...S.statini].sort((a, b) => (a.prod || '').localeCompare(b.prod || '') || (a.name || '').localeCompare(b.name || ''))) {
+  for (const st of [...shown].sort((a, b) => (a.prod || '').localeCompare(b.prod || '') || (a.name || '').localeCompare(b.name || ''))) {
     if (st.error) { summary.push(`<tr><td colspan="6">${esc(st.file)}: ${esc(st.error)}</td></tr>`); continue; }
     const app = new Set(S.rows.filter(r => r.code && r.vmonth === st.prod && !r.excluded && nameKey(r.agent) === st.key).map(r => r.code));
     const common = [...st.points].filter(x => app.has(x)).length;
@@ -929,7 +983,7 @@ function statiniCard() {
   }
   const f = d => d ? fmtDate(d) : '–';
   return `<section class="card" id="statiniCard">
-    <div class="card-head"><div><h2>Verifica statini</h2><p>Ogni statino paga i punti (POD e PDR) validati nel mese precedente.</p></div>
+    <div class="card-head"><div><h2>Verifica statini</h2><p>Statini in memoria per i mesi e gli agenti selezionati (${shown.length} di ${S.statini.length}). Ogni statino paga i punti validati nel mese precedente.</p></div>
       <button type="button" data-copy="tst">Copia tabella</button></div>
     <div class="tablewrap"><table>
       <thead><tr><th>Agente</th><th>Mese di produzione</th><th class="num">Pagati</th><th class="num">Attesi</th><th class="num">In comune</th><th>Esito</th></tr></thead>
