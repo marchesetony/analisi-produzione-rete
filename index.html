@@ -954,7 +954,7 @@ function simulate() {
   const L = parseListino(S.sim.listino);
   const months = [...S.selMonths].sort();
   const pct = { own: 100, coord: S.sim.pctCoord, sub: S.sim.pctSub };
-  const res = { amKey, months, lines: { own: [0, 0, 0], coord: [0, 0, 0], sub: [0, 0, 0] }, byAgent: new Map(), missing: [], bills: 0, mwh: 0, storni: 0, stCount: 0, contrib: S.sim.contrib * months.length, perMonth: [] };
+  const res = { amKey, months, lines: { own: [0, 0, 0], coord: [0, 0, 0], sub: [0, 0, 0] }, byAgent: new Map(), missing: [], bills: 0, mwh: 0, storni: 0, stCount: 0, contrib: 0, perMonth: [] };
   const stAll = storniList(null);
   for (const mk of months) {
     const pm = { mk, override: 0, own: 0, bills: 0, mwh: 0, storni: 0 };
@@ -999,7 +999,8 @@ function simCard() {
   const R = simulate(), am = agentObj(R.amKey);
   const tile = (lab, val, sub, cls = '') => `<div class="sim-t ${cls}"><span class="lab">${lab}</span><span class="v">${val}</span>${sub ? `<span class="sub">${sub}</span>` : ''}</div>`;
   const stat = S.statini.filter(st => st.key === nameKey(am?.name || '') && R.months.includes(st.prod) && st.summary);
-  const statTot = stat.reduce((t, st) => t + (st.summary.TOTALE || 0), 0);
+  // the fixed contribution is not part of the simulation: left out of the statino total too
+  const statTot = stat.reduce((t, st) => t + (st.summary.TOTALE || 0) - Object.entries(st.summary).filter(([k]) => /^contributo/i.test(k)).reduce((a, [, v]) => a + v, 0), 0);
   const agents = [...R.byAgent.values()].sort((a, b) => ({ coord: 0, sub: 1, own: 2 }[a.role] - { coord: 0, sub: 1, own: 2 }[b.role]) || b.quota - a.quota);
   const roleTxt = { own: 'propri', coord: `coordinatore ${S.sim.pctCoord}%`, sub: `sub-agente ${S.sim.pctSub}%` };
   const amOpts = [...S.agents].filter(a => a.subs.size).sort((a, b) => b.subs.size - a.subs.size).map(a => `<option value="${esc(a.key)}" ${a.key === R.amKey ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
@@ -1011,22 +1012,21 @@ function simCard() {
       ${tile(`Sub-agenti ${S.sim.pctSub}%`, eur(R.lines.sub[2]), `${R.lines.sub[0]} punti · gettoni ${eur(R.lines.sub[1])}`)}
       ${R.lines.own[0] ? tile('Gettoni propri', eur(R.lines.own[2]), `${R.lines.own[0]} punti`) : ''}
       ${tile(`Ricorrente bollette (${eur(S.sim.perBill)})`, eur(R.ricBills), `${fmt(R.bills)} bollette del mese precedente`)}
-      ${tile(`Ricorrente MWh (${eur(S.sim.perMwh)})`, eur(R.ricMwh), `${R.mwh.toFixed(1).replace('.', ',')} MWh del mese precedente`)}
+      ${tile(`Ricorrente MWh luce (${eur(S.sim.perMwh)})`, eur(R.ricMwh), `${R.mwh.toFixed(1).replace('.', ',')} MWh luce del mese precedente · gas escluso`)}
       ${R.storni ? tile('Storni', '−' + eur(R.storni), `${R.stCount} punti stornati negli statini`, 'neg') : ''}
-      ${R.contrib ? tile('Contributo fisso', eur(R.contrib), '') : ''}
       ${tile('Totale stimato', eur(R.total), stat.length ? `statino: ${eur(statTot)} · differenza ${eur(R.total - statTot)}` : 'carica il tuo statino per il confronto', 'tot')}
     </div>
     ${stat.length ? (() => {
       const sumBy = (re, not = /^$/) => stat.reduce((t, st) => t + Object.entries(st.summary).filter(([k]) => re.test(k) && !not.test(k)).reduce((a, [, v]) => a + v, 0), 0);
       const cmp = [['Percentuali (Over su rete / su agenti)', sumBy(/over su rete|percentuale su agenti/i, /storno/i), R.lines.coord[2] + R.lines.sub[2]],
-        ['Ricorrente', sumBy(/^ricorrente/i), R.ricBills + R.ricMwh], ['Storni', sumBy(/storno/i), -R.storni], ['Contributo', sumBy(/^contributo/i), R.contrib], ['Gettoni propri', sumBy(/^gettone$/i), R.lines.own[2]]];
+        ['Ricorrente', sumBy(/^ricorrente/i), R.ricBills + R.ricMwh], ['Storni', sumBy(/storno/i), -R.storni], ['Gettoni propri', sumBy(/^gettone$/i), R.lines.own[2]]];
       return `<div class="tablewrap"><table><thead><tr><th>Confronto con lo statino</th><th class="num">Statino</th><th class="num">Simulazione</th><th class="num">Differenza</th></tr></thead>
         <tbody>${cmp.filter(([, a, b]) => a || b).map(([l, a, b]) => `<tr><td>${l}</td><td class="num">${eur(a)}</td><td class="num">${eur(b)}</td><td class="num">${eur(b - a)}</td></tr>`).join('')}
         <tr class="total"><td>Totale</td><td class="num">${eur(statTot)}</td><td class="num">${eur(R.total)}</td><td class="num">${eur(R.total - statTot)}</td></tr></tbody></table></div>`; })() : ''}
     ${R.missing.length ? `<div class="sim-warn">⚠️ ${R.missing.length} punti senza gettone calcolato (non contati): ${esc([...new Set(R.missing.map(m => `${m.r.cte || 'CTE vuota'} – ${m.note}`))].slice(0, 6).join('; '))}${R.missing.length > 6 ? '…' : ''}</div>` : ''}
     ${R.months.length > 1 ? `<details class="sim-det"><summary>Per mese</summary><div class="tablewrap"><table>
       <thead><tr><th>Mese</th><th class="num">Percentuali</th><th class="num">Propri</th><th class="num">Ricorrente</th><th class="num">Storni</th><th class="num">Totale</th></tr></thead>
-      <tbody>${R.perMonth.map(p => `<tr><td>${monthLabel(p.mk)}</td><td class="num">${eur(p.override)}</td><td class="num">${eur(p.own)}</td><td class="num">${eur(p.ric)}</td><td class="num">${p.storni ? '−' + eur(p.storni) : '–'}</td><td class="num"><b>${eur(p.override + p.own + p.ric - p.storni + S.sim.contrib)}</b></td></tr>`).join('')}</tbody></table></div></details>` : ''}
+      <tbody>${R.perMonth.map(p => `<tr><td>${monthLabel(p.mk)}</td><td class="num">${eur(p.override)}</td><td class="num">${eur(p.own)}</td><td class="num">${eur(p.ric)}</td><td class="num">${p.storni ? '−' + eur(p.storni) : '–'}</td><td class="num"><b>${eur(p.override + p.own + p.ric - p.storni)}</b></td></tr>`).join('')}</tbody></table></div></details>` : ''}
     <details class="sim-det"><summary>Dettaglio per agente</summary><div class="tablewrap"><table>
       <thead><tr><th>Agente</th><th>Ruolo</th><th class="num">Punti</th><th class="num">Gettoni agente</th><th class="num">Tua quota</th></tr></thead>
       <tbody>${agents.map(a => `<tr><td>${esc(a.name)}</td><td>${roleTxt[a.role]}</td><td class="num">${a.n}${a.miss ? ` <span class="muted">(${a.miss} senza gettone)</span>` : ''}</td><td class="num">${eur(a.base)}</td><td class="num"><b>${eur(a.quota)}</b></td></tr>`).join('')}</tbody></table></div></details>
@@ -1036,8 +1036,7 @@ function simCard() {
         <label>% coordinatori <input type="text" inputmode="decimal" id="simPc" data-sim="pctCoord" value="${S.sim.pctCoord}"></label>
         <label>% sub-agenti <input type="text" inputmode="decimal" id="simPs" data-sim="pctSub" value="${S.sim.pctSub}"></label>
         <label>€ per bolletta <input type="text" inputmode="decimal" id="simPb" data-sim="perBill" value="${S.sim.perBill}"></label>
-        <label>€ per MWh <input type="text" inputmode="decimal" id="simPm" data-sim="perMwh" value="${S.sim.perMwh}"></label>
-        <label>Contributo fisso al mese € <input type="text" inputmode="decimal" id="simCo" data-sim="contrib" value="${S.sim.contrib}"></label>
+        <label>€ per MWh (solo luce) <input type="text" inputmode="decimal" id="simPm" data-sim="perMwh" value="${S.sim.perMwh}"></label>
         <label>% gettone se non SDD <input type="text" inputmode="decimal" id="simNs" data-sim="noSdd" value="${S.sim.noSdd}"></label>
       </div>
       <label class="small" style="display:block;margin-top:8px">Listino gettoni: chiave CTE | POD/PDR | consumo da | consumo a | gettone € | sdd/nosdd (facoltativo)
