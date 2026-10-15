@@ -153,8 +153,18 @@ td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
 .kpi.sup-cum { border-color: var(--k-cum); background: var(--k-cum-soft); }
 .kpi.mix { grid-column: 1 / -1; border-color: var(--ink-2); background: var(--surface-2); }
 .mix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 6px; }
-.mix-i { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
-.mix-t { font-weight: 700; color: var(--ink-2); font-size: .92rem; }
+.mix-i { background: var(--surface); border: 2px solid var(--line); border-top-width: 5px; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+.mix-i.t-sw { border-color: var(--accent); background: var(--accent-soft); }
+.mix-i.t-scv { border-color: var(--k-in); background: var(--k-in-soft); }
+.mix-i.t-sub { border-color: var(--k-cum); background: var(--k-cum-soft); }
+.mix-i.t-vol { border-color: var(--ele); background: var(--ele-soft); }
+.mix-i.t-wb, .mix-i.t-oth { border-color: var(--other); }
+.mix-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.mbadge { border: 2px solid var(--line); background: var(--surface); border-radius: 99px; padding: 4px 12px; font-size: .95rem; font-weight: 600; color: var(--ink-2); }
+.mbadge b { color: var(--ink); font-size: 1.1rem; margin-left: 4px; }
+.mbadge.alert { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+.mbadge.alert b { color: var(--bad); }
+.mix-t { font-weight: 700; color: var(--ink); font-size: 1rem; }
 .mix-n { font-family: var(--f-display); font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mix-n small { font-size: .95rem; }
 body.printing .kpi.mix { grid-column: 1 / -1; }
@@ -779,8 +789,13 @@ function mixTile(vrows) {
   const list = [...groups].sort(([a], [b]) => ((order.indexOf(norm(a)) + 1 || 99) - (order.indexOf(norm(b)) + 1 || 99)) || a.localeCompare(b));
   const nSw = (groups.get([...groups.keys()].find(k => norm(k) === 'switch')) || []).length;
   const pct = (a, b) => b ? `${Math.round(a / b * 100)}%` : '–';
-  return `<div class="kpi mix"><span class="lab">🧩 Validati per tipologia</span>
-    <div class="mix-grid">${list.map(([t, rs]) => `<div class="mix-i">
+  const count = names => [...groups].filter(([k]) => names.includes(norm(k))).reduce((n, [, rs]) => n + rs.length, 0);
+  const quickShare = vrows.length ? count(['switch con voltura', 'subentro']) / vrows.length : 0;
+  const cls = t => ({ 'switch': 't-sw', 'switch con voltura': 't-scv', 'subentro': 't-sub', 'voltura': 't-vol', 'win back': 't-wb' })[norm(t)] || 't-oth';
+  return `<div class="kpi mix"><div class="row between" style="gap:8px 16px"><span class="lab">🧩 Validati per tipologia</span>
+      <span class="mix-badges"><span class="mbadge">Switch <b>${pct(nSw, vrows.length)}</b></span>
+      <span class="mbadge ${quickShare > 0.3 ? 'alert' : ''}" title="Oltre il 30% è evidenziato in rosso">Switch con voltura + subentri <b>${Math.round(quickShare * 100)}%</b>${quickShare > 0.3 ? ' ⚠️' : ''}</span></span></div>
+    <div class="mix-grid">${list.map(([t, rs]) => `<div class="mix-i ${cls(t)}">
       <span class="mix-t">${esc(t)}</span>
       <span class="mix-n">${rs.length} <small>punti</small></span>
       <span class="sub">${volTxt(rs)}</span>
