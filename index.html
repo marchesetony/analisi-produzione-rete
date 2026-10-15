@@ -780,7 +780,7 @@ function render() {
       <button type="button" class="primary pdf" id="pdfBtn">Stampa PDF</button>
     </div>
     ${S.selMonths.size > 1 ? `<section class="card" id="growthCard">
-      <div class="card-head"><div><h2>📈 Crescita mese per mese</h2><p>Colonne: punti validati nel mese (verde luce, arancio gas). Linea azzurra: punti in fornitura a fine mese, al netto degli usciti (numero scritto in verticale sopra ogni pallino).</p></div></div>
+      <div class="card-head"><div><h2>📈 Crescita mese per mese</h2><p>Colonne: punti validati nel mese (verde luce, arancio gas). Linea azzurra: punti in fornitura a fine mese, al netto degli usciti (numero scritto sopra ogni pallino).</p></div></div>
       <div class="chartbox" id="cbGr"><canvas id="chGr" role="img" aria-label="Crescita mensile dei punti validati e in fornitura"></canvas></div>
     </section>` : ''}
 
@@ -1186,17 +1186,17 @@ function drawGrowth(months, keys, c) {
       const { ctx } = chart; ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const mE = chart.getDatasetMeta(1).data, mG = chart.getDatasetMeta(2).data, line = chart.getDatasetMeta(0).data;
       // value inside each coloured segment, when there is room; moved aside when the vertical supply label crosses the bar
-      ctx.font = `700 13px ${c.font}`;
+      ctx.font = `800 14px ${c.font}`;
       const shift = i => line[i].y > Math.min(mE[i].y, mG[i].y) - 4 ? -Math.min(18, (mE[i].width || 40) / 4) : 0;
-      ctx.fillStyle = '#0b1f10';
+      ctx.fillStyle = '#1e3a8a';                                     // blu scuro
       mE.forEach((b, i) => { if (nE[i] && b.base - b.y > 16) ctx.fillText(nE[i], b.x + shift(i), (b.y + b.base) / 2); });
-      ctx.fillStyle = '#2b1300';
+      ctx.fillStyle = '#1e3a8a';
       mG.forEach((b, i) => { if (nG[i] && b.base - b.y > 16) ctx.fillText(nG[i], b.x + shift(i), (b.y + b.base) / 2); });
       // supply total written vertically just above each dot of the azure line
       ctx.font = `800 14px ${c.font}`; ctx.lineWidth = 5; ctx.strokeStyle = '#fff'; ctx.fillStyle = SKY; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
       line.forEach((pt, i) => {
         const t = `${active[i]} in fornitura`;
-        ctx.save(); ctx.translate(pt.x, pt.y - 12); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'left';
+        ctx.save(); ctx.translate(pt.x + 3, pt.y - 12); ctx.rotate(-75 * Math.PI / 180); ctx.textAlign = 'left';   // 15° verso destra
         ctx.strokeText(t, 0, 0); ctx.fillText(t, 0, 0); ctx.restore();
       });
       ctx.restore();
