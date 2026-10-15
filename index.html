@@ -159,6 +159,11 @@ td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
 .kpi.sup-next { border-color: var(--k-next); background: var(--k-next-soft); border-style: dashed; border-top-style: solid; }
 .kpi.sup-in { border-color: var(--k-in); background: var(--k-in-soft); }
 .kpi.sup-cum { border-color: var(--k-cum); background: var(--k-cum-soft); }
+.kpi.exit { grid-column: 1 / -1; border-color: var(--bad); background: var(--bad-soft); }
+.exit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 4px 0; }
+.exit-i { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; }
+.exit-i.cur { border: 2px solid var(--bad); }
+body.printing .kpi.exit { grid-column: 1 / -1; }
 .kpi.mix { grid-column: 1 / -1; border-color: var(--ink-2); background: var(--surface-2); }
 .mix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 6px; }
 .mix-i { background: var(--surface); border: 2px solid var(--line); border-top-width: 5px; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
@@ -276,6 +281,9 @@ tr.sum-si td.si { color: var(--tot); font-weight: 700; }
         <div class="rule"><span class="small">Giorno limite del mese successivo</span><input type="text" id="cutoffDay" inputmode="numeric" value="6" style="width:4em" aria-label="Giorno limite"></div>
         <h3 style="margin-top:6px">Esclusioni</h3>
         <div id="rules" style="display:flex;flex-direction:column;gap:8px"></div>
+        <h3 style="margin-top:6px">Accorpa agenti</h3>
+        <div class="muted small">Un accorpamento per riga, come “Rosanna Foti = Pietro Amaddeo”: i punti del primo vengono contati al secondo.</div>
+        <textarea id="mergeText" rows="3" spellcheck="false"></textarea>
       </details>
     </aside>
 
@@ -433,12 +441,17 @@ function applyGasColor() {
 }
 const gasDot = () => (GAS_COLORS[S.gasColor] || GAS_COLORS.rosso).dot;
 
+// ---------- merged agents ("Rosanna Foti = Pietro Amaddeo") ----------
+let MERGE = new Map();
+const parseMerge = t => new Map(String(t || '').split(/\n/).map(l => l.split('=').map(x => x.trim())).filter(([a, b]) => a && b).map(([a, b]) => [norm(a), b]));
+
 // ---------- state ----------
 const S = {
   sample: true, wb: null, sheet: '', headers: [], raw: [], map: {}, rules: [],
   rows: [], agents: [], monthsAll: [], years: [], year: null, cutoff: 6,
   selMonths: new Set(), search: '', charts: [],
   gasColor: store.get('ac.gasColor') || 'rosso',
+  mergeText: store.get('ac.merge') ?? 'Rosanna Foti = Pietro Amaddeo',
   sel: '', subOn: true, subOff: new Set()   // sel: chosen agent key ('' = all); subOff: sub-agents unticked
 };
 
@@ -494,6 +507,7 @@ function handleFile(file) {
 
 // ---------- normalise rows ----------
 function process(resetSelection) {
+  MERGE = parseMerge(S.mergeText);
   const m = S.map, H = S.headers;
   const cell = (r, k) => m[k] >= 0 ? r[m[k]] : '';
   const sameVol = m.kwh >= 0 && m.kwh === m.smc;
@@ -504,9 +518,10 @@ function process(resetSelection) {
     const com = normCommodity(cell(r, 'commodity'), hasPod && !hasPdr, hasPdr && !hasPod);
     // a filled "Agente" column means a sub-agent working under the agency in "Agenzia"
     const agency = String(cell(r, 'agente') ?? '').trim();
-    const agentName = String(cell(r, 'subAgente') ?? '').trim() || agency || '(senza agente)';
+    const agentOrig = String(cell(r, 'subAgente') ?? '').trim() || agency || '(senza agente)';
+    const agentName = MERGE.get(norm(agentOrig)) || agentOrig;
     // hierarchy above the agent, e.g. "Lorenzo Foti,Tony Marchese," → both have this agent as sub-agent
-    const chain = [agency, ...String(cell(r, 'areaManager') ?? '').split(',').map(x => x.trim())].filter(x => x && !/\btest\b/i.test(x));
+    const chain = [agency, ...String(cell(r, 'areaManager') ?? '').split(',').map(x => x.trim())].filter(x => x && !/\btest\b/i.test(x)).map(x => MERGE.get(norm(x)) || x);
     let excluded = null;
     for (const rule of S.rules) {
       if (rule.on && rule.col >= 0 && rule.val.trim()) {
@@ -520,7 +535,7 @@ function process(resetSelection) {
       id: String(cell(r, 'id') ?? '').trim(), nome: String(cell(r, 'clienteNome') ?? '').trim(),
       raw: { CC: cell(r, 'cc'), QC: cell(r, 'qc'), Validazione: cell(r, 'validazione'), 'Pre-check': cell(r, 'precheck'), 'Switch In': cell(r, 'switchIn') },
       start: m.dataAttiv >= 0 ? parseDate(cell(r, 'dataAttiv')) : null, end: m.dataFine >= 0 ? parseDate(cell(r, 'dataFine')) : null,
-      agent: agentName, akey: norm(agentName), chain, firma, month: monthKey(firma), okDate: m.dataOk >= 0 ? parseDate(cell(r, 'dataOk')) : null,
+      agent: agentName, akey: norm(agentName), agentOrig, chain, firma, month: monthKey(firma), okDate: m.dataOk >= 0 ? parseDate(cell(r, 'dataOk')) : null,
       com, cliente: normCliente(cell(r, 'tipoCliente')),
       tipologia: String(cell(r, 'tipologia') ?? '').trim() || '—',
       pratica: normPratica(cell(r, 'statoPratica')), wf: normWF(cell(r, 'statoWF')),
@@ -651,6 +666,8 @@ function buildMapUI() {
   if (Object.entries(S.map).some(([k, v]) => v < 0 && ['agente', 'data', 'commodity', 'kwh', 'smc'].includes(k))) $('mapPanel').open = true;
 }
 $('mapGrid').addEventListener('change', e => { const f = e.target.dataset.f; if (!f) return; S.map[f] = +e.target.value; e.target.previousElementSibling.className = S.map[f] < 0 ? 'miss' : ''; process(false); });
+$('mergeText').value = S.mergeText;
+$('mergeText').addEventListener('change', e => { S.mergeText = e.target.value; store.set('ac.merge', S.mergeText); process(false); toast('Accorpamenti aggiornati'); });
 $('rules').addEventListener('change', e => {
   const i = e.target.dataset.r; if (i == null) return;
   const p = e.target.dataset.p, r = S.rules[+i];
@@ -738,10 +755,11 @@ function render() {
     </div>
 
     <div class="kpis">
-      <div class="kpi kv"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span></div>
+      <div class="kpi kv"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span>${(() => { const o = storniList(keys).filter(x => S.selMonths.has(x.month)).length; return o ? `<span class="sub" style="color:var(--bad)">−${o} usciti nel periodo · netto <b>${fmt(T.vn - o)}</b></span>` : ''; })()}</div>
       <div class="kpi ele"><span class="lab">🔵 Luce validati</span><span class="val">${fmt(T.vk)} <small style="font-size:.9rem">kWh</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'ELE').length)} contratti</span></div>
       <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
       ${supplyTiles(keys)}
+      ${exitTile(keys)}
       ${mixTile(vrows)}
     </div>
 
@@ -760,12 +778,12 @@ function render() {
       </table></div>
     </section>
 
-    ${entities.length > 1 ? `<section class="card">
+    ${entities.length > 1 || entities.some(e => e.a.out) ? `<section class="card">
       <div class="card-head"><div><h2>Dettaglio per agente</h2><p>Solo contratti validati.</p></div>
         <button type="button" data-copy="tcmp">Copia tabella</button></div>
       <div class="tablewrap"><table id="tcmp">
-        <thead><tr><th>Agente</th><th class="num">Validati</th><th class="num">🔵 Contratti luce</th><th class="num">🔵 kWh</th><th class="num">🟠 Contratti gas</th><th class="num">🟠 Smc</th></tr></thead>
-        <tbody>${entities.map(e => cmpRow(e.name, e.a, '')).join('')}${cmpRow(nSubs ? '🟢 TOTALE GRUPPO' : '🟢 TOTALE', aggV(vrows), 'total')}</tbody>
+        <thead><tr><th>Agente</th><th class="num">Validati</th><th class="num">🚪 Usciti</th><th class="num">Netto</th><th class="num">🔵 Contratti luce</th><th class="num">🔵 kWh</th><th class="num">🟠 Contratti gas</th><th class="num">🟠 Smc</th></tr></thead>
+        <tbody>${entities.map(e => cmpRow(e.name, e.a, '')).join('')}${cmpRow(nSubs ? '🟢 TOTALE GRUPPO' : '🟢 TOTALE', { ...aggV(vrows), out: entities.reduce((n, e) => n + e.a.out, 0) }, 'total')}</tbody>
       </table></div>
     </section>` : ''}
 
@@ -794,6 +812,32 @@ function render() {
 // Supply starts: validated points by expected activation date ("Data Prevista Attivazione").
 // Volture and subentri start within days of validation; switch (and win back) start on the 1st of month M+2.
 const isQuick = r => /voltur|subentr/i.test(r.tipologia || '');
+// Reversed points (storni) from the statini in memory, attributed via the export when possible.
+// A storno counts in the statino's production month (Statino_09 → agosto), as the paid points do.
+function storniList(keys) {
+  const byCode = new Map(); S.rows.forEach(r => { if (r.code && !byCode.has(r.code)) byCode.set(r.code, r); });
+  const seen = new Map();
+  for (const st of S.statini) for (const x of (st.storni || [])) {
+    const prev = seen.get(x.code); if (prev && prev.month <= st.prod) continue;
+    const r = byCode.get(x.code);
+    const agent = r ? r.agent : (MERGE.get(norm(st.name)) || st.name);
+    seen.set(x.code, { code: x.code, month: st.prod, amount: x.amount, r, agent, akey: norm(agent),
+      com: r ? r.com : (/^IT/.test(x.code) ? 'ELE' : 'GAS'), kwh: r?.com === 'ELE' ? r.kwh : 0, smc: r?.com === 'GAS' ? r.smc : 0 });
+  }
+  return [...seen.values()].filter(x => !keys || keys.has(x.akey));
+}
+function exitTile(keys) {
+  if (!S.statini.some(st => st.storni)) return '';
+  const months = [...S.selMonths].sort(), last = months[months.length - 1];
+  const all = storniList(keys).filter(x => x.month <= last);
+  const byMonth = new Map(); all.forEach(x => byMonth.set(x.month, [...(byMonth.get(x.month) || []), x]));
+  const rows = [...byMonth].sort(([a], [b]) => b.localeCompare(a));
+  return `<div class="kpi exit"><div class="row between" style="gap:8px 16px"><span class="lab">🚪 POD e PDR usciti (stornati negli statini)</span>
+      <span class="mbadge alert">Totale fino ${(/^[AEIOU]/.test(monthLabel(last)) ? 'ad ' : 'a ') + monthLabel(last)} <b>${all.length}</b> · ${volTxt(all)}</span></div>
+    ${rows.length ? `<div class="exit-grid">${rows.map(([mk, xs]) => `<div class="exit-i ${S.selMonths.has(mk) ? 'cur' : ''}"><span class="mix-t">${monthLabel(mk)}</span><span class="mix-n">${xs.length} <small>${xs.length === 1 ? 'punto' : 'punti'}</small></span><span class="sub">${volTxt(xs)}</span></div>`).join('')}</div>`
+      : '<span class="sub">Nessuno storno negli statini in memoria per questi agenti.</span>'}
+    <span class="sub">Calcolati dai soli statini caricati: per avere tutti gli usciti servono gli statini di tutti i mesi.</span></div>`;
+}
 // Validated points by contract type, with each type's weight on the total and compared with the switches.
 function mixTile(vrows) {
   if (!vrows.length) return '';
@@ -823,11 +867,13 @@ function supplyTiles(keys) {
   const [ly, lm] = last.split('-').map(Number), endOfPeriod = Date.UTC(ly, lm, 0, 23, 59);
   const pts = S.rows.filter(r => isValid(r) && !r.excluded && r.start && (!keys || keys.has(r.akey)));
   const kinds = rs => { const q = rs.filter(isQuick).length; return [rs.length - q ? `${rs.length - q} switch` : '', q ? `${q} voltura/sub.` : ''].filter(Boolean).join(' · ') || '–'; };
-  const tile = (title, rs, cls) => `<div class="kpi sup-k ${cls}"><span class="lab">${title}</span><span class="val">${fmt(rs.length)} <small style="font-size:.9rem">punti</small></span><span class="sub">${volTxt(rs)}</span><span class="sub">${kinds(rs)}</span></div>`;
+  const tile = (title, rs, cls, note = '') => `<div class="kpi sup-k ${cls}"><span class="lab">${title}</span><span class="val">${fmt(rs.length)} <small style="font-size:.9rem">punti</small></span><span class="sub">${volTxt(rs)}</span><span class="sub">${kinds(rs)}</span>${note ? `<span class="sub" style="color:var(--bad)">${note}</span>` : ''}</div>`;
+  const gone = new Set(storniList(keys).filter(x => x.month <= last).map(x => x.code));
+  const goneIn = pts.filter(r => r.start.getTime() <= endOfPeriod && gone.has(r.code)).length;
   const a = mk => (/^[AEIOU]/.test(monthLabel(mk)) ? 'ad ' : 'a ') + monthLabel(mk);
   const next = monthKey(new Date(Date.UTC(ly, lm, 1)));   // month after the last one analysed
   return tile(`⚡ Entrano in fornitura ${a(last)}`, pts.filter(r => monthKey(r.start) === last), 'sup-in')
-    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)), 'sup-cum')
+    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod) && !gone.has(r.code)), 'sup-cum', goneIn ? `al netto di ${goneIn} usciti` : '')
     + tile(`⏭️ Entrano in fornitura ${a(next)}`, pts.filter(r => monthKey(r.start) === next), 'sup-next');
 }
 // "123456 kWh · 789 Smc" for a set of points (only the units present)
@@ -853,14 +899,16 @@ function aggV(vrows) {
   return a;
 }
 function cmpRow(name, a, cls) {
-  return `<tr class="${cls}"><td>${esc(name)}</td><td class="num">${fmt(a.n)}</td><td class="num">${fmt(a.ne)}</td><td class="num">${fmt(a.kwh)}</td><td class="num">${fmt(a.ng)}</td><td class="num">${fmt(a.smc)}</td></tr>`;
+  return `<tr class="${cls}"><td>${esc(name)}</td><td class="num">${fmt(a.n)}</td><td class="num" style="color:var(--bad)">${a.out ? '−' + fmt(a.out) : '–'}</td><td class="num"><b>${fmt(a.n - (a.out || 0))}</b></td><td class="num">${fmt(a.ne)}</td><td class="num">${fmt(a.kwh)}</td><td class="num">${fmt(a.ng)}</td><td class="num">${fmt(a.smc)}</td></tr>`;
 }
 function buildEntities(vrows) {
   const V = new Map();
   for (const r of vrows) (V.get(r.akey) || V.set(r.akey, []).get(r.akey)).push(r);
   const multi = scopeKeys()?.size > 1;
   const nameOf = k => (agentObj(k)?.name || k) + (k === S.sel && multi ? ' (propri)' : '');
-  return [...V.keys()].map(k => ({ k, name: nameOf(k), a: aggV(V.get(k)) }))
+  const out = new Map(); storniList(scopeKeys()).filter(x => S.selMonths.has(x.month)).forEach(x => out.set(x.akey, (out.get(x.akey) || 0) + 1));
+  out.forEach((_, k) => { if (!V.has(k)) V.set(k, []); });
+  return [...V.keys()].map(k => ({ k, name: nameOf(k), a: { ...aggV(V.get(k)), out: out.get(k) || 0 } }))
     .sort((x, y) => (y.k === S.sel) - (x.k === S.sel) || y.a.n - x.a.n);
 }
 
@@ -948,14 +996,19 @@ async function readStatino(file) {
   const prod = monthKey(new Date(Date.UTC(pay.getUTCFullYear(), pay.getUTCMonth() - 1, 1)));
   const name = m[3].replace(/_/g, ' ').trim();
   const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-  const points = new Set();
+  const points = new Set(), storni = [];
   for (let i = 1; i <= doc.numPages; i++) {
     const tc = await (await doc.getPage(i)).getTextContent();
     const lines = tc.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join('').split('\n');
     // only the new-contract lines ("Gettone 75.0"): recurring, variable and surcharge lines repeat old points
-    for (const l of lines) if (/Gettone\s*\d/i.test(l)) (l.match(POINT_RE) || []).forEach(x => points.add(x));
+    for (const l of lines) {
+      if (/Gettone\s*\d/i.test(l)) (l.match(POINT_RE) || []).forEach(x => points.add(x));
+      // reversed points: "IT001E78744524 CLIENTE -50" on the summary page
+      const sm = l.trim().match(/^(IT\d{3}E\d{7}[\dA-Z]|\d{14})\b.*\s(-\d+(?:[.,]\d+)?)$/);
+      if (sm && !/Gettone|Ricorrente|Variabile|Maggiorazione/i.test(l)) storni.push({ code: sm[1], amount: parseNum(sm[2]) });
+    }
   }
-  return { file: file.name, name, key: nameKey(name), prod, points };
+  return { file: file.name, name, key: nameKey(name), prod, points, storni };
 }
 // Statini stay in this browser's memory (only the parsed points, not the PDFs); new uploads are added to them.
 S.statini = (store.get('ac.statini') || []).map(x => ({ ...x, points: new Set(x.points) }));
@@ -973,7 +1026,9 @@ async function handleStatini(files) {
     st.loadedAt = new Date().toISOString();
     const old = S.statini.find(x => x.key === st.key && x.prod === st.prod);
     if (!old) { S.statini.push(st); added++; }
-    else if (sameSet(old.points, st.points)) same++;
+    else if (sameSet(old.points, st.points) && (!old.storni || sameSet(new Set(old.storni.map(x => x.code)), new Set(st.storni.map(x => x.code))))) {
+      if (!old.storni) { old.storni = st.storni; added++; } else same++;
+    }
     else S.stPending.push({ old, neu: st });
   }
   saveStatini(); renderStInfo(); render();
@@ -988,12 +1043,14 @@ function renderStInfo() {
       ${list.map(x => `<div class="row between" style="gap:6px"><span>${esc(x.name)} · ${monthLabel(x.prod)} <span class="muted">(${x.points.size})</span></span><button class="link" type="button" data-strm="${esc(x.key)}|${x.prod}" aria-label="Togli">Togli</button></div>`).join('')}
     </div><button class="link" type="button" id="stClear" style="margin-top:6px">Togli tutti</button></details>` : 'Nessun statino in memoria.';
   const f = (st, other) => { const only = [...st.points].filter(x => !other.points.has(x)); return only.length ? only.map(esc).join(', ') : 'nessuno'; };
+  const fs = (st, other) => { const o = new Set((other.storni || []).map(x => x.code)); const only = (st.storni || []).filter(x => !o.has(x.code)).map(x => x.code); return only.length ? only.map(esc).join(', ') : 'nessuno'; };
   $('stPending').innerHTML = S.stPending.map((d, i) => `<div class="dup">
       <b>Statino doppio: ${esc(d.neu.name)} · ${monthLabel(d.neu.prod)}</b>
       <div class="small">Già in memoria: <i>${esc(d.old.file)}</i> · ${d.old.points.size} punti${d.old.loadedAt ? ` · caricato il ${new Date(d.old.loadedAt).toLocaleDateString('it-IT')}` : ''}</div>
       <div class="small">Nuovo: <i>${esc(d.neu.file)}</i> · ${d.neu.points.size} punti</div>
       <div class="small">Solo nel vecchio: ${f(d.old, d.neu)}</div>
       <div class="small">Solo nel nuovo: ${f(d.neu, d.old)}</div>
+      <div class="small">Storni solo nel vecchio: ${fs(d.old, d.neu)} · solo nel nuovo: ${fs(d.neu, d.old)}</div>
       <div class="row"><button type="button" data-dup="${i}" data-pick="old">Tieni il vecchio</button><button type="button" class="primary" data-dup="${i}" data-pick="new">Usa il nuovo</button></div>
     </div>`).join('');
 }
@@ -1026,7 +1083,7 @@ function statiniCard() {
   const rowsOut = [], summary = [];
   for (const st of [...shown].sort((a, b) => (a.prod || '').localeCompare(b.prod || '') || (a.name || '').localeCompare(b.name || ''))) {
     if (st.error) { summary.push(`<tr><td colspan="6">${esc(st.file)}: ${esc(st.error)}</td></tr>`); continue; }
-    const app = new Set(S.rows.filter(r => r.code && r.vmonth === st.prod && !r.excluded && nameKey(r.agent) === st.key).map(r => r.code));
+    const app = new Set(S.rows.filter(r => r.code && r.vmonth === st.prod && !r.excluded && nameKey(r.agentOrig) === st.key).map(r => r.code));
     const common = [...st.points].filter(x => app.has(x)).length;
     const onlySt = [...st.points].filter(x => !app.has(x)), onlyApp = [...app].filter(x => !st.points.has(x));
     summary.push(`<tr class="${onlySt.length || onlyApp.length ? '' : 'ok-row'}"><td>${esc(st.name)}</td><td>${monthLabel(st.prod)}</td><td class="num">${st.points.size}</td><td class="num">${app.size}</td><td class="num">${common}</td><td>${onlySt.length || onlyApp.length ? `<span class="pill wait">${onlySt.length + onlyApp.length} da controllare</span>` : '<span class="pill ok">Tutto torna</span>'}</td></tr>`);
@@ -1036,7 +1093,7 @@ function statiniCard() {
       if (r && !isValid(r)) why = 'Pagato, ma oggi nell’export non è più tutto OK (pratica riaperta?)';
       else if (r && r.excluded) why = `Pagato, ma escluso da una regola (${r.excluded})`;
       else if (r && r.vmonth !== st.prod) why = `Pagato in un mese diverso: per i dati è di ${monthLabel(r.vmonth)}`;
-      else if (r && nameKey(r.agent) !== st.key) why = `Pagato a ${st.name}, ma nell’export è di ${r.agent}`;
+      else if (r && nameKey(r.agentOrig) !== st.key) why = `Pagato a ${st.name}, ma nell’export è di ${r.agentOrig}`;
       rowsOut.push({ st, x, r, kind: 'Pagato, non atteso', why, cls: 'wait' });
     }
     for (const x of onlyApp) {

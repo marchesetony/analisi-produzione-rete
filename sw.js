@@ -1,5 +1,5 @@
 // Offline support. The page itself is network-first (so updates arrive), libraries and fonts cache-first.
-const CACHE = 'produzione-20261015144011';
+const CACHE = 'produzione-20261015145409';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
