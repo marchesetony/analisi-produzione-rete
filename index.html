@@ -755,7 +755,7 @@ function render() {
     </div>
 
     <div class="kpis">
-      <div class="kpi kv"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span>${(() => { const o = storniList(keys).filter(x => S.selMonths.has(x.month)).length; return o ? `<span class="sub" style="color:var(--bad)">−${o} usciti nel periodo · netto <b>${fmt(T.vn - o)}</b></span>` : ''; })()}</div>
+      <div class="kpi kv"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span></div>
       <div class="kpi ele"><span class="lab">🔵 Luce validati</span><span class="val">${fmt(T.vk)} <small style="font-size:.9rem">kWh</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'ELE').length)} contratti</span></div>
       <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
       ${supplyTiles(keys)}
@@ -778,12 +778,12 @@ function render() {
       </table></div>
     </section>
 
-    ${entities.length > 1 || entities.some(e => e.a.out) ? `<section class="card">
+    ${entities.length > 1 ? `<section class="card">
       <div class="card-head"><div><h2>Dettaglio per agente</h2><p>Solo contratti validati.</p></div>
         <button type="button" data-copy="tcmp">Copia tabella</button></div>
       <div class="tablewrap"><table id="tcmp">
-        <thead><tr><th>Agente</th><th class="num">Validati</th><th class="num">🚪 Usciti</th><th class="num">Netto</th><th class="num">🔵 Contratti luce</th><th class="num">🔵 kWh</th><th class="num">🟠 Contratti gas</th><th class="num">🟠 Smc</th></tr></thead>
-        <tbody>${entities.map(e => cmpRow(e.name, e.a, '')).join('')}${cmpRow(nSubs ? '🟢 TOTALE GRUPPO' : '🟢 TOTALE', { ...aggV(vrows), out: entities.reduce((n, e) => n + e.a.out, 0) }, 'total')}</tbody>
+        <thead><tr><th>Agente</th><th class="num">Validati</th><th class="num">🔵 Contratti luce</th><th class="num">🔵 kWh</th><th class="num">🟠 Contratti gas</th><th class="num">🟠 Smc</th></tr></thead>
+        <tbody>${entities.map(e => cmpRow(e.name, e.a, '')).join('')}${cmpRow(nSubs ? '🟢 TOTALE GRUPPO' : '🟢 TOTALE', aggV(vrows), 'total')}</tbody>
       </table></div>
     </section>` : ''}
 
@@ -836,7 +836,7 @@ function exitTile(keys) {
       <span class="mbadge alert">Totale fino ${(/^[AEIOU]/.test(monthLabel(last)) ? 'ad ' : 'a ') + monthLabel(last)} <b>${all.length}</b> · ${volTxt(all)}</span></div>
     ${rows.length ? `<div class="exit-grid">${rows.map(([mk, xs]) => `<div class="exit-i ${S.selMonths.has(mk) ? 'cur' : ''}"><span class="mix-t">${monthLabel(mk)}</span><span class="mix-n">${xs.length} <small>${xs.length === 1 ? 'punto' : 'punti'}</small></span><span class="sub">${volTxt(xs)}</span></div>`).join('')}</div>`
       : '<span class="sub">Nessuno storno negli statini in memoria per questi agenti.</span>'}
-    <span class="sub">Calcolati dai soli statini caricati: per avere tutti gli usciti servono gli statini di tutti i mesi.</span></div>`;
+    <span class="sub">Si tolgono solo dal totale generale (📈 In fornitura), non dai numeri del mese. Calcolati dagli statini caricati.</span></div>`;
 }
 // Validated points by contract type, with each type's weight on the total and compared with the switches.
 function mixTile(vrows) {
@@ -899,16 +899,14 @@ function aggV(vrows) {
   return a;
 }
 function cmpRow(name, a, cls) {
-  return `<tr class="${cls}"><td>${esc(name)}</td><td class="num">${fmt(a.n)}</td><td class="num" style="color:var(--bad)">${a.out ? '−' + fmt(a.out) : '–'}</td><td class="num"><b>${fmt(a.n - (a.out || 0))}</b></td><td class="num">${fmt(a.ne)}</td><td class="num">${fmt(a.kwh)}</td><td class="num">${fmt(a.ng)}</td><td class="num">${fmt(a.smc)}</td></tr>`;
+  return `<tr class="${cls}"><td>${esc(name)}</td><td class="num">${fmt(a.n)}</td><td class="num">${fmt(a.ne)}</td><td class="num">${fmt(a.kwh)}</td><td class="num">${fmt(a.ng)}</td><td class="num">${fmt(a.smc)}</td></tr>`;
 }
 function buildEntities(vrows) {
   const V = new Map();
   for (const r of vrows) (V.get(r.akey) || V.set(r.akey, []).get(r.akey)).push(r);
   const multi = scopeKeys()?.size > 1;
   const nameOf = k => (agentObj(k)?.name || k) + (k === S.sel && multi ? ' (propri)' : '');
-  const out = new Map(); storniList(scopeKeys()).filter(x => S.selMonths.has(x.month)).forEach(x => out.set(x.akey, (out.get(x.akey) || 0) + 1));
-  out.forEach((_, k) => { if (!V.has(k)) V.set(k, []); });
-  return [...V.keys()].map(k => ({ k, name: nameOf(k), a: { ...aggV(V.get(k)), out: out.get(k) || 0 } }))
+  return [...V.keys()].map(k => ({ k, name: nameOf(k), a: aggV(V.get(k)) }))
     .sort((x, y) => (y.k === S.sel) - (x.k === S.sel) || y.a.n - x.a.n);
 }
 
