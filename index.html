@@ -746,10 +746,10 @@ function render() {
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="invalidCard">
       <div class="card-head"><div><h2>Contratti non validi · ${fmt(invalid.length)} <small style="font-weight:500;font-size:.85rem;color:var(--ink-2)">${volTxt(invalid)}</small></h2><p>Inseriti nel periodo ma senza tutti i controlli OK, con il motivo.</p></div>
-        ${invalid.length ? '<button type="button" data-copy="tinv">Copia tabella</button>' : ''}</div>
-      ${invalid.length ? `<div class="tablewrap tall"><table id="tinv">
+        ${invalid.length ? '<div class="row"><button type="button" class="pdf-btn" data-pdf="invalidCard">PDF elenco</button><button type="button" data-copy="tinv">Copia tabella</button></div>' : ''}</div>
+      ${invalid.length ? `<div class="tablewrap tall main-skip"><table id="tinv">
         <thead><tr><th>Agente</th><th>${esc(S.headers[S.map.data] || 'Data')}</th><th>ID</th><th>Cliente</th><th>Commodity</th><th class="num">Volume</th><th>Motivo</th></tr></thead>
         <tbody>${invalid.map(r => `<tr><td>${esc(r.agent)}</td><td>${fmtDate(r.firma)}</td><td>${esc(r.id)}</td><td>${esc(r.nome)}</td><td>${comCell(r.com)}</td><td class="num">${r.com === 'GAS' ? fmt(r.smc) + ' Smc' : fmt(r.kwh) + ' kWh'}</td><td class="reason">${esc(reasonOf(r))}</td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="muted" style="margin:0">Tutti i contratti inseriti nel periodo hanno passato i controlli.</p>'}
@@ -785,8 +785,8 @@ function pointsCard(vrows) {
   if (!vrows.length) return '';
   const rs = [...vrows].sort((a, b) => a.agent.localeCompare(b.agent, 'it') || a.vmonth.localeCompare(b.vmonth) || (a.firma - b.firma));
   const f = d => d ? fmtDate(d) : '–';
-  return `<details class="card"><summary style="cursor:pointer"><h2 style="display:inline">Elenco punti validati · ${rs.length}</h2> <span class="muted small">${volTxt(rs)} · tocca per aprire</span></summary>
-    <div class="row" style="justify-content:flex-end"><button type="button" data-copy="tpts">Copia tabella</button></div>
+  return `<details class="card" id="pointsCard"><summary style="cursor:pointer"><h2 style="display:inline">Elenco punti validati · ${rs.length}</h2> <span class="muted small">${volTxt(rs)} · tocca per aprire</span></summary>
+    <div class="row" style="justify-content:flex-end"><button type="button" class="pdf-btn" data-pdf="pointsCard">PDF elenco</button><button type="button" data-copy="tpts">Copia tabella</button></div>
     <div class="tablewrap tall"><table id="tpts">
       <thead><tr><th>Agente</th><th>Mese</th><th>ID</th><th>POD / PDR</th><th>Tipologia</th><th>Inserito</th><th>Chiuso</th><th>Attivazione</th><th class="num">Volume</th></tr></thead>
       <tbody>${rs.map(r => `<tr><td>${esc(r.agent)}</td><td>${monthLabel(r.vmonth)}</td><td>${esc(r.id)}</td><td>${esc(r.code)}</td><td>${esc(r.tipologia)}</td><td>${f(r.firma)}</td><td>${f(r.okDate)}</td><td>${f(r.start)}</td><td class="num">${r.com === 'GAS' ? fmt(r.smc) + ' Smc' : fmt(r.kwh) + ' kWh'}</td></tr>`).join('')}</tbody>
@@ -994,7 +994,7 @@ function statiniCard() {
   const f = d => d ? fmtDate(d) : '–';
   return `<section class="card" id="statiniCard">
     <div class="card-head"><div><h2>Verifica statini</h2><p>Statini in memoria per i mesi e gli agenti selezionati (${shown.length} di ${S.statini.length}). Ogni statino paga i punti validati nel mese precedente.</p></div>
-      <button type="button" data-copy="tst">Copia tabella</button></div>
+      <div class="row"><button type="button" class="pdf-btn" data-pdf="statiniCard">PDF verifica</button><button type="button" data-copy="tst">Copia tabella</button></div></div>
     <div class="tablewrap"><table>
       <thead><tr><th>Agente</th><th>Mese di produzione</th><th class="num">Pagati</th><th class="num">Attesi</th><th class="num">In comune</th><th>Esito</th></tr></thead>
       <tbody>${summary.join('')}</tbody></table></div>
@@ -1006,9 +1006,11 @@ function statiniCard() {
 }
 
 // ---------- PDF (A4, 1 cm margins, one page) ----------
-async function exportPdf() {
+// Main report: one A4 page with totals only. Detail lists (non validi, elenco punti, verifica statini) print on their own, over as many pages as needed.
+const PDF_SECTIONS = { invalidCard: 'Contratti non validi', pointsCard: 'Elenco punti validati', statiniCard: 'Verifica statini' };
+async function exportPdf(section) {
   if (!window.jspdf || !window.html2canvas) { toast('Libreria PDF non caricata: controlla la connessione'); return; }
-  const btn = $('pdfBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Preparo il PDF…'; }
+  toast('Preparo il PDF…');
   const root = document.documentElement, prev = root.getAttribute('data-theme');
   const agentTxt = (S.sel && agentObj(S.sel)?.name) || 'Tutti gli agenti';
   const monthsTxt = [...S.selMonths].sort().map(monthLabel).join(', ');
@@ -1018,19 +1020,33 @@ async function exportPdf() {
     root.setAttribute('data-theme', 'light');   // the PDF is always light
     await new Promise(r => setTimeout(r, 60));
     render();
-    const el = $('report');
+    if (section === 'pointsCard') $('pointsCard')?.setAttribute('open', '');
+    const el = section ? $(section) : $('report');
     const canvas = await html2canvas(el, {
       scale: 2, backgroundColor: '#ffffff', useCORS: true,
-      ignoreElements: n => n.matches?.('[data-copy], #pdfBtn, .swatches'),
+      ignoreElements: n => n.matches?.('[data-copy], #pdfBtn, .swatches, .pdf-btn') || (!section && n.matches?.('#statiniCard, #pointsCard, .main-skip')),
       onclone: doc => doc.querySelectorAll('.tablewrap').forEach(t => { t.style.maxHeight = 'none'; t.style.overflow = 'visible'; })
     });
     const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const footer = () => { pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')} · Salvo errori e omissioni`, 10, 287); };
     const maxW = 190, maxH = 277 - 5;            // 1 cm margins, 5 mm kept for the footer
-    let w = maxW, h = canvas.height * w / canvas.width;
-    if (h > maxH) { h = maxH; w = canvas.width * h / canvas.height; }
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, 10, w, h);
-    pdf.setFontSize(8); pdf.setTextColor(120);
-    pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')} · Salvo errori e omissioni`, 10, 287);
+    if (!section) {
+      let w = maxW, h = canvas.height * w / canvas.width;
+      if (h > maxH) { h = maxH; w = canvas.width * h / canvas.height; }
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, 10, w, h);
+      footer();
+    } else {
+      // heading on each page, then the section cut into page-high slices
+      const top = 18, pageH = maxH - (top - 10), slicePx = Math.floor(canvas.width * pageH / maxW);
+      for (let y = 0, page = 0; y < canvas.height; y += slicePx, page++) {
+        if (page) pdf.addPage();
+        pdf.setFontSize(10); pdf.setTextColor(30); pdf.text(`${PDF_SECTIONS[section]} · ${agentTxt} · ${monthsTxt}`, 10, 13);
+        const part = document.createElement('canvas'); part.width = canvas.width; part.height = Math.min(slicePx, canvas.height - y);
+        part.getContext('2d').drawImage(canvas, 0, y, canvas.width, part.height, 0, 0, canvas.width, part.height);
+        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 10, top, maxW, part.height * maxW / canvas.width);
+        footer();
+      }
+    }
     blob = pdf.output('blob');
   } catch (err) {
     console.error(err); toast('Non sono riuscito a creare il PDF');
@@ -1041,7 +1057,7 @@ async function exportPdf() {
     render();
   }
   if (!blob) return;
-  const filename = `Report ${agentTxt} ${monthsTxt}.pdf`.replace(/[\\/:*?"<>|]/g, '-');
+  const filename = `${section ? PDF_SECTIONS[section] : 'Report'} ${agentTxt} ${monthsTxt}.pdf`.replace(/[\\/:*?"<>|]/g, '-');
   const dl = window.claude?.use ? await window.claude.use('downloads') : null;
   if (dl) {
     try { await dl.save({ filename, data: blob }); toast('PDF salvato'); }
@@ -1060,6 +1076,7 @@ async function exportPdf() {
 }
 $('report').addEventListener('click', e => {
   if (e.target.closest('#pdfBtn')) exportPdf();
+  const pb = e.target.closest('.pdf-btn'); if (pb) exportPdf(pb.dataset.pdf);
   const sw = e.target.closest('[data-gas]');
   if (sw) { S.gasColor = sw.dataset.gas; store.set('ac.gasColor', S.gasColor); render(); }
 });
