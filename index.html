@@ -765,9 +765,13 @@ function drawCharts() {
   const labels = months.map(monthLabel);
   const valueLabels = { id: 'valueLabels', afterDatasetsDraw(chart) {
     const { ctx } = chart;
-    ctx.save(); ctx.fillStyle = ink; ctx.font = `700 12px ${font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    // vertical labels above each bar, plain integers (no thousands dot) so they never overlap or read as decimals
+    ctx.save(); ctx.fillStyle = ink; ctx.font = `700 12px ${font}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     chart.data.datasets.forEach((ds, di) => chart.getDatasetMeta(di).data.forEach((b, i) => {
-      if (ds.data[i]) ctx.fillText(`${fmt(ds.data[i])} ${ds.unit}`, b.x, b.y - 4);
+      if (!ds.data[i]) return;
+      ctx.save(); ctx.translate(b.x, b.y - 6); ctx.rotate(-Math.PI / 2);
+      ctx.fillText(`${Math.round(ds.data[i])} ${ds.unit}`, 0, 0);
+      ctx.restore();
     }));
     ctx.restore();
   } };
@@ -782,10 +786,10 @@ function drawCharts() {
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 22 } },
       plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } },
-        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt(c.parsed.y)}` } } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${Math.round(c.parsed.y)}` } } },
       scales: {
-        yk: { position: 'left', beginAtZero: true, grace: '12%', grid: { color: grid }, ticks: { color: ele, callback: v => fmt(v), maxTicksLimit: 6 }, title: { display: true, text: 'kWh', color: ele } },
-        ys: { position: 'right', beginAtZero: true, grace: '12%', grid: { display: false }, ticks: { color: gas, callback: v => fmt(v), maxTicksLimit: 6 }, title: { display: true, text: 'Smc', color: gas } },
+        yk: { position: 'left', beginAtZero: true, grace: '45%', grid: { color: grid }, ticks: { color: ele, callback: v => Math.round(v), maxTicksLimit: 6 }, title: { display: true, text: 'kWh', color: ele } },
+        ys: { position: 'right', beginAtZero: true, grace: '45%', grid: { display: false }, ticks: { color: gas, callback: v => Math.round(v), maxTicksLimit: 6 }, title: { display: true, text: 'Smc', color: gas } },
         x: { grid: { display: false } }
       }
     },
