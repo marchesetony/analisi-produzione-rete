@@ -119,6 +119,7 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .scope-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
 .scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.scope-head > div:nth-child(2) { flex: 1 1 280px; min-width: 0; }
 .scope-head .big.months { text-wrap: pretty; font-family: var(--f-body); font-size: 1.45rem; font-weight: 600; color: var(--tot); }
 .dup { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: var(--r); padding: 10px; display: flex; flex-direction: column; gap: 4px; color: var(--ink); word-break: break-word; }
 .disclaimer { margin: 4px 2px 0; font-size: .8rem; color: var(--muted); font-style: italic; }
@@ -145,6 +146,7 @@ body.printing .side, body.printing .top { display: none; }
 body.printing .layout { display: block; }
 body.printing .report { width: 1000px; }
 body.printing .tablewrap { max-height: none !important; overflow: visible !important; }
+body.printing .scope-head .big { text-wrap: wrap; white-space: nowrap; }
 body.printing .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 body.printing .kpi, body.printing .kpi.sup-k { grid-column: span 2; }
 body.printing .charts { grid-template-columns: 1fr 1fr !important; }
@@ -1133,19 +1135,27 @@ async function exportPdf(section) {
     await new Promise(r => setTimeout(r, 60));
     render();
     if (section === 'pointsCard') $('pointsCard')?.setAttribute('open', '');
-    const el = section ? $(section) : $('report');
-    const canvas = await html2canvas(el, {
+    const shot = el => html2canvas(el, {
       scale: 2, backgroundColor: '#ffffff', useCORS: true,
       ignoreElements: n => n.matches?.('[data-copy], #pdfBtn, .swatches, .pdf-btn') || (!section && n.matches?.('#statiniCard, #pointsCard, .main-skip')),
       onclone: doc => doc.querySelectorAll('.tablewrap').forEach(t => { t.style.maxHeight = 'none'; t.style.overflow = 'visible'; })
     });
+    const canvas = section ? await shot($(section)) : null;
     const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const footer = () => { pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')} · Salvo errori e omissioni`, 10, 287); };
     const maxW = 190, maxH = 277 - 5;            // 1 cm margins, 5 mm kept for the footer
     if (!section) {
-      let w = maxW, h = canvas.height * w / canvas.width;
-      if (h > maxH) { h = maxH; w = canvas.width * h / canvas.height; }
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, 10, w, h);
+      // full A4 width: each block of the report is placed at 19 cm wide, moving to a new page when it does not fit
+      const blocks = [...$('report').children].filter(b => !b.matches('#statiniCard, #pointsCard, .disclaimer'));
+      let y = 10;
+      for (const b of blocks) {
+        const c = await shot(b);
+        let w = maxW, h = c.height * w / c.width;
+        if (h > maxH) { h = maxH; w = c.width * h / c.height; }   // a block taller than a page is shrunk to fit
+        if (y > 10 && y + h > 10 + maxH) { footer(); pdf.addPage(); y = 10; }
+        pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, y, w, h);
+        y += h + 4;
+      }
       footer();
     } else {
       // heading on each page, then the section cut into page-high slices
