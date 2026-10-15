@@ -751,8 +751,10 @@ function render() {
 const isQuick = r => /voltur|subentr/i.test(r.tipologia || '');
 function supplyCard(keys) {
   if (!(S.map.dataAttiv >= 0)) return '';
-  const months = [...S.selMonths].sort(), last = months[months.length - 1];
+  const months = [...S.selMonths].sort(), first = months[0], last = months[months.length - 1];
   const pts = S.rows.filter(r => isValid(r) && !r.excluded && r.start && (!keys || keys.has(r.akey)));
+  // where the production month sits relative to the selected period: 0 = in it, 1 = before, 2 = after
+  const when = vm => S.selMonths.has(vm) ? 0 : vm < first ? 1 : 2;
   const list = [...new Set([...months, ...pts.map(r => monthKey(r.start)).filter(mk => mk > last)])].sort();
   const sum = rs => { const e = rs.filter(r => r.com === 'ELE'), g = rs.filter(r => r.com === 'GAS');
     return { ne: e.length, kwh: e.reduce((s, r) => s + r.kwh, 0), ng: g.length, smc: g.reduce((s, r) => s + r.smc, 0) }; };
@@ -764,10 +766,10 @@ function supplyCard(keys) {
     // one line per contract type × production month, current-period production first
     const groups = new Map();
     for (const r of rs) { const k = (isQuick(r) ? 'Q' : 'S') + '|' + r.vmonth; groups.set(k, [...(groups.get(k) || []), r]); }
-    [...groups].sort(([a], [b]) => (S.selMonths.has(b.split('|')[1]) - S.selMonths.has(a.split('|')[1])) || a.localeCompare(b))
+    [...groups].sort(([a], [b]) => (when(a.split('|')[1]) - when(b.split('|')[1])) || a.localeCompare(b))
       .forEach(([k, g]) => {
-        const [t, vm] = k.split('|'), cur = S.selMonths.has(vm);
-        const label = `${t === 'Q' ? 'Voltura / Subentro' : 'Switch'} · prodotti ${/^[AEIOU]/.test(monthLabel(vm)) ? 'ad' : 'a'} ${monthLabel(vm)} ${cur ? '<span class="pill ok">del periodo</span>' : '<span class="pill na">precedenti</span>'}`;
+        const [t, vm] = k.split('|'), w = when(vm);
+        const label = `${t === 'Q' ? 'Voltura / Subentro' : 'Switch'} · prodotti ${/^[AEIOU]/.test(monthLabel(vm)) ? 'ad' : 'a'} ${monthLabel(vm)} ${['<span class="pill ok">del periodo</span>', '<span class="pill na">mesi precedenti</span>', '<span class="pill wait">mesi successivi</span>'][w]}`;
         body += tr(label, sum(g), 'member');
       });
   }
