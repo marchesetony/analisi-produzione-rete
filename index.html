@@ -110,6 +110,9 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .scope-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
 .scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.sup-t td.sc { white-space: nowrap; vertical-align: top; }
+.sup-t td.sc span { display: block; font-size: .8rem; }
+.sup-t td.sc span:first-of-type { color: var(--ink-2); }
 .disclaimer { margin: 4px 2px 0; font-size: .8rem; color: var(--muted); font-style: italic; }
 .sup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .sup { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
@@ -753,32 +756,26 @@ function supplyCard(keys) {
   if (!(S.map.dataAttiv >= 0)) return '';
   const months = [...S.selMonths].sort(), first = months[0], last = months[months.length - 1];
   const pts = S.rows.filter(r => isValid(r) && !r.excluded && r.start && (!keys || keys.has(r.akey)));
-  // where the production month sits relative to the selected period: 0 = in it, 1 = before, 2 = after
-  const when = vm => S.selMonths.has(vm) ? 0 : vm < first ? 1 : 2;
   const list = [...new Set([...months, ...pts.map(r => monthKey(r.start)).filter(mk => mk > last)])].sort();
-  const sum = rs => { const e = rs.filter(r => r.com === 'ELE'), g = rs.filter(r => r.com === 'GAS');
-    return { ne: e.length, kwh: e.reduce((s, r) => s + r.kwh, 0), ng: g.length, smc: g.reduce((s, r) => s + r.smc, 0) }; };
-  const tr = (label, x, cls = '') => `<tr class="${cls}"><td>${label}</td><td class="num">${fmt(x.kwh)} kWh</td><td class="num">${x.ne}</td><td class="num">${fmt(x.smc)} Smc</td><td class="num">${x.ng}</td><td class="num"><b>${x.ne + x.ng}</b></td></tr>`;
-  let body = '';
-  for (const mk of list) {
-    const rs = pts.filter(r => monthKey(r.start) === mk);
-    body += tr(`${monthLabel(mk)}${mk > last ? ' <span class="pill na">in arrivo</span>' : ''}`, sum(rs), 'grp');
-    // one line per contract type × production month, current-period production first
-    const groups = new Map();
-    for (const r of rs) { const k = (isQuick(r) ? 'Q' : 'S') + '|' + r.vmonth; groups.set(k, [...(groups.get(k) || []), r]); }
-    [...groups].sort(([a], [b]) => (when(a.split('|')[1]) - when(b.split('|')[1])) || a.localeCompare(b))
-      .forEach(([k, g]) => {
-        const [t, vm] = k.split('|'), w = when(vm);
-        const label = `${t === 'Q' ? 'Voltura / Subentro' : 'Switch'} · prodotti ${/^[AEIOU]/.test(monthLabel(vm)) ? 'ad' : 'a'} ${monthLabel(vm)} ${['<span class="pill ok">del periodo</span>', '<span class="pill na">mesi precedenti</span>', '<span class="pill wait">mesi successivi</span>'][w]}`;
-        body += tr(label, sum(g), 'member');
-      });
-  }
+  // production month relative to the selected period
+  const del = r => S.selMonths.has(r.vmonth), prima = r => r.vmonth < first, dopo = r => r.vmonth > last;
+  const cell = rs => {
+    if (!rs.length) return '<td class="sc">–</td>';
+    const q = rs.filter(isQuick).length, sw = rs.length - q;
+    const kinds = [sw ? `${sw} switch` : '', q ? `${q} voltura/sub.` : ''].filter(Boolean).join(' · ');
+    return `<td class="sc"><b>${rs.length}</b> punti<span>${volTxt(rs)}</span><span class="muted">${kinds}</span></td>`;
+  };
+  const inList = pts.filter(r => list.includes(monthKey(r.start)));
+  const showDopo = inList.some(dopo);
+  const row = (label, rs, cls = '') => `<tr class="${cls}"><td><b>${label}</b></td>${cell(rs)}${cell(rs.filter(del))}${cell(rs.filter(prima))}${showDopo ? cell(rs.filter(dopo)) : ''}</tr>`;
+  const periodo = months.length > 1 ? 'nel periodo' : `a ${MESI_BREVI[+first.slice(5) - 1]}`;
   return `<section class="card">
-    <div class="card-head"><div><h2>Ingressi in fornitura</h2><p>Punti validati per mese di attivazione prevista. Switch: partono il 1° del secondo mese dopo la validazione. Volture e subentri: pochi giorni dopo.</p></div>
+    <div class="card-head"><div><h2>Ingressi in fornitura</h2><p>Punti validati per mese di attivazione prevista, divisi per mese di produzione. Gli switch partono il 1° del secondo mese, volture e subentri subito.</p></div>
       <button type="button" data-copy="tsup">Copia tabella</button></div>
-    <div class="tablewrap"><table id="tsup">
-      <thead><tr><th>Mese di attivazione / origine</th><th class="num">🔵 kWh</th><th class="num">POD</th><th class="num">🟠 Smc</th><th class="num">PDR</th><th class="num">Punti</th></tr></thead>
-      <tbody>${body}${tr('🟢 TOTALE', sum(pts.filter(r => list.includes(monthKey(r.start)))), 'total')}</tbody>
+    <div class="tablewrap"><table id="tsup" class="sup-t">
+      <thead><tr><th>Attivazione</th><th>Totale</th><th>Prodotti ${periodo}</th><th>Prodotti prima</th>${showDopo ? '<th>Prodotti dopo</th>' : ''}</tr></thead>
+      <tbody>${list.map(mk => row(monthLabel(mk) + (mk > last ? ' <span class="pill na">in arrivo</span>' : ''), pts.filter(r => monthKey(r.start) === mk))).join('')}
+      ${row('🟢 TOTALE', inList, 'total')}</tbody>
     </table></div>
   </section>`;
 }
