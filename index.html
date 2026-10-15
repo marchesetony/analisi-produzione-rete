@@ -747,30 +747,25 @@ function render() {
 // Supply starts: validated points by expected activation date ("Data Prevista Attivazione").
 function supplyCard(keys) {
   if (!(S.map.dataAttiv >= 0)) return '';
-  const months = [...S.selMonths].sort();
-  const [ly, lm] = months[months.length - 1].split('-').map(Number);
-  const endOfPeriod = Date.UTC(ly, lm, 0, 23, 59);          // last day of the last selected month
+  const months = [...S.selMonths].sort(), first = months[0], last = months[months.length - 1];
   const pts = S.rows.filter(r => isValid(r) && !r.excluded && r.start && (!keys || keys.has(r.akey)));
-  const sum = rs => ({ ne: rs.filter(r => r.com === 'ELE').length, kwh: rs.reduce((s, r) => s + (r.com === 'ELE' ? r.kwh : 0), 0),
-    ng: rs.filter(r => r.com === 'GAS').length, smc: rs.reduce((s, r) => s + (r.com === 'GAS' ? r.smc : 0), 0) });
-  const entering = sum(pts.filter(r => S.selMonths.has(monthKey(r.start))));
-  const active = sum(pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)));
-  const next = [1, 2, 3].map(i => monthKey(new Date(Date.UTC(ly, lm - 1 + i, 1))));
-  const upcoming = next.map(mk => ({ mk, ...sum(pts.filter(r => monthKey(r.start) === mk)) })).filter(x => x.ne || x.ng);
-  const block = (title, sub, x) => `<div class="sup"><span class="lab">${title}</span>
-      <div class="sup-row"><span class="dot ele"></span><b>${fmt(x.kwh)}</b> kWh <span class="muted">· ${x.ne} POD</span></div>
-      <div class="sup-row"><span class="dot gas"></span><b>${fmt(x.smc)}</b> Smc <span class="muted">· ${x.ng} PDR</span></div>
-      <span class="sub">${sub}</span></div>`;
-  const periodTxt = months.length > 1 ? 'nei mesi selezionati' : `a ${monthLabel(months[0])}`;
+  // selected months plus every later month with expected activations
+  const list = [...new Set([...months, ...pts.map(r => monthKey(r.start)).filter(mk => mk > last)])].sort();
+  const rows = list.map(mk => {
+    const rs = pts.filter(r => monthKey(r.start) === mk);
+    const e = rs.filter(r => r.com === 'ELE'), g = rs.filter(r => r.com === 'GAS');
+    return { mk, ne: e.length, kwh: e.reduce((s, r) => s + r.kwh, 0), ng: g.length, smc: g.reduce((s, r) => s + r.smc, 0), future: mk > last };
+  });
+  const tot = rows.reduce((t, x) => ({ ne: t.ne + x.ne, kwh: t.kwh + x.kwh, ng: t.ng + x.ng, smc: t.smc + x.smc }), { ne: 0, kwh: 0, ng: 0, smc: 0 });
+  const tr = (label, x, cls = '', tag = '') => `<tr class="${cls}"><td>${label}${tag}</td><td class="num">${fmt(x.kwh)} kWh</td><td class="num">${x.ne}</td><td class="num">${fmt(x.smc)} Smc</td><td class="num">${x.ng}</td><td class="num"><b>${x.ne + x.ng}</b></td></tr>`;
   return `<section class="card">
-    <div class="card-head"><div><h2>Ingressi in fornitura</h2><p>Punti validati in base alla data prevista di attivazione.</p></div></div>
-    <div class="sup-grid">
-      ${block(`Entrano in fornitura ${periodTxt}`, `${entering.ne + entering.ng} punti`, entering)}
-      ${block(`Totale in fornitura a fine ${monthLabel(months[months.length - 1])}`, `${active.ne + active.ng} punti attivi`, active)}
-      ${upcoming.length ? `<div class="sup" style="grid-column:1 / -1"><span class="lab">In arrivo nei prossimi mesi</span>
-        ${upcoming.map(u => `<div class="sup-row small"><span class="mon">${monthLabel(u.mk)}</span> <span class="dot ele"></span>${fmt(u.kwh)} kWh <span class="dot gas" style="margin-left:6px"></span>${fmt(u.smc)} Smc <span class="muted">· ${u.ne + u.ng} punti</span></div>`).join('')}
-      </div>` : ''}
-    </div>
+    <div class="card-head"><div><h2>Ingressi in fornitura</h2><p>Punti validati per mese di attivazione prevista.</p></div>
+      <button type="button" data-copy="tsup">Copia tabella</button></div>
+    <div class="tablewrap"><table id="tsup">
+      <thead><tr><th>Mese di attivazione</th><th class="num">🔵 kWh</th><th class="num">POD</th><th class="num">🟠 Smc</th><th class="num">PDR</th><th class="num">Punti</th></tr></thead>
+      <tbody>${rows.map(x => tr(monthLabel(x.mk), x, '', x.future ? ' <span class="pill na">in arrivo</span>' : '')).join('')}
+      ${tr('🟢 TOTALE', tot, 'total')}</tbody>
+    </table></div>
   </section>`;
 }
 function aggV(vrows) {
