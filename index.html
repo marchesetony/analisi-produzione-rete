@@ -763,14 +763,18 @@ function drawCharts() {
   const per = (mk, com, f) => V.filter(r => r.vmonth === mk && r.com === com).reduce((s, r) => s + r[f], 0);
   const kwh = months.map(m => per(m, 'ELE', 'kwh')), smc = months.map(m => per(m, 'GAS', 'smc'));
   const labels = months.map(monthLabel);
+  const isLight = hex => { const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})/i.exec(hex || ''); if (!m) return false; const [r, g, b] = m.slice(1).map(x => parseInt(x, 16)); return 0.299 * r + 0.587 * g + 0.114 * b > 170; };
   const valueLabels = { id: 'valueLabels', afterDatasetsDraw(chart) {
     const { ctx } = chart;
     // vertical labels above each bar, plain integers (no thousands dot) so they never overlap or read as decimals
     ctx.save(); ctx.fillStyle = ink; ctx.font = `700 12px ${font}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     chart.data.datasets.forEach((ds, di) => chart.getDatasetMeta(di).data.forEach((b, i) => {
       if (!ds.data[i]) return;
-      ctx.save(); ctx.translate(b.x, b.y - 6); ctx.rotate(-Math.PI / 2);
-      ctx.fillText(`${Math.round(ds.data[i])} ${ds.unit}`, 0, 0);
+      const label = `${Math.round(ds.data[i])} ${ds.unit}`, tw = ctx.measureText(label).width, inside = (b.base - b.y) > tw + 16;
+      ctx.save();
+      if (inside) { ctx.translate(b.x, b.base - 8); ctx.fillStyle = isLight(ds.backgroundColor) ? '#141a22' : '#fff'; }   // written inside its own bar, bottom-up
+      else ctx.translate(b.x, b.y - 6);                                          // short bar: just above it
+      ctx.rotate(-Math.PI / 2); ctx.fillText(label, 0, 0);
       ctx.restore();
     }));
     ctx.restore();
@@ -788,8 +792,8 @@ function drawCharts() {
       plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } },
         tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${Math.round(c.parsed.y)}` } } },
       scales: {
-        yk: { position: 'left', beginAtZero: true, grace: '45%', grid: { color: grid }, ticks: { color: ele, callback: v => Math.round(v), maxTicksLimit: 6 }, title: { display: true, text: 'kWh', color: ele } },
-        ys: { position: 'right', beginAtZero: true, grace: '45%', grid: { display: false }, ticks: { color: gas, callback: v => Math.round(v), maxTicksLimit: 6 }, title: { display: true, text: 'Smc', color: gas } },
+        yk: { position: 'left', beginAtZero: true, grace: '20%', grid: { color: grid }, ticks: { color: ele, callback: v => Math.round(v), maxTicksLimit: 6 }, title: { display: true, text: 'kWh', color: ele } },
+        ys: { position: 'right', beginAtZero: true, grace: '20%', grid: { display: false }, ticks: { color: gas, callback: v => Math.round(v), maxTicksLimit: 6 }, title: { display: true, text: 'Smc', color: gas } },
         x: { grid: { display: false } }
       }
     },
