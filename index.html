@@ -151,6 +151,13 @@ td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
 .kpi.sup-k { grid-column: span 3; }
 .kpi.sup-in { border-color: var(--k-in); background: var(--k-in-soft); }
 .kpi.sup-cum { border-color: var(--k-cum); background: var(--k-cum-soft); }
+.kpi.mix { grid-column: 1 / -1; border-color: var(--ink-2); background: var(--surface-2); }
+.mix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 6px; }
+.mix-i { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.mix-t { font-weight: 700; color: var(--ink-2); font-size: .92rem; }
+.mix-n { font-family: var(--f-display); font-size: 1.7rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mix-n small { font-size: .95rem; }
+body.printing .kpi.mix { grid-column: 1 / -1; }
 .kpi.si { border-color: var(--tot); background: var(--tot-soft); }
 @media (max-width: 720px) { .kpis { grid-template-columns: minmax(0, 1fr); } .kpi, .kpi.sup-k { grid-column: auto; } .kpi .val { font-size: 2rem; } }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
@@ -711,6 +718,7 @@ function render() {
       <div class="kpi ele"><span class="lab">🔵 Luce validati</span><span class="val">${fmt(T.vk)} <small style="font-size:.9rem">kWh</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'ELE').length)} contratti</span></div>
       <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
       ${supplyTiles(keys)}
+      ${mixTile(vrows)}
     </div>
 
     <section class="card">
@@ -762,6 +770,23 @@ function render() {
 // Supply starts: validated points by expected activation date ("Data Prevista Attivazione").
 // Volture and subentri start within days of validation; switch (and win back) start on the 1st of month M+2.
 const isQuick = r => /voltur|subentr/i.test(r.tipologia || '');
+// Validated points by contract type, with each type's weight on the total and compared with the switches.
+function mixTile(vrows) {
+  if (!vrows.length) return '';
+  const order = ['switch', 'switch con voltura', 'subentro', 'voltura', 'win back'];
+  const groups = new Map();
+  for (const r of vrows) { const t = (r.tipologia || '—').trim(); groups.set(t, [...(groups.get(t) || []), r]); }
+  const list = [...groups].sort(([a], [b]) => ((order.indexOf(norm(a)) + 1 || 99) - (order.indexOf(norm(b)) + 1 || 99)) || a.localeCompare(b));
+  const nSw = (groups.get([...groups.keys()].find(k => norm(k) === 'switch')) || []).length;
+  const pct = (a, b) => b ? `${Math.round(a / b * 100)}%` : '–';
+  return `<div class="kpi mix"><span class="lab">🧩 Validati per tipologia</span>
+    <div class="mix-grid">${list.map(([t, rs]) => `<div class="mix-i">
+      <span class="mix-t">${esc(t)}</span>
+      <span class="mix-n">${rs.length} <small>punti</small></span>
+      <span class="sub">${volTxt(rs)}</span>
+      <span class="sub"><b>${pct(rs.length, vrows.length)}</b> del totale${norm(t) !== 'switch' && nSw ? ` · pari al <b>${pct(rs.length, nSw)}</b> degli switch` : ''}</span>
+    </div>`).join('')}</div></div>`;
+}
 // Two tiles: points starting supply in the selected month(s), and all points in supply up to the end of the period.
 function supplyTiles(keys) {
   if (!(S.map.dataAttiv >= 0)) return '';
