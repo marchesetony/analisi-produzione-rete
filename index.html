@@ -32,6 +32,7 @@
   --ele: #2a78d6; --ele-soft: #e3eefb; --gas: #eb6834; --gas-soft: #fdebe3;
   --tot: #15803d; --tot-soft: #e2f3e8; --warn: #b77900; --warn-soft: #fbf1dc; --bad: #c93b33; --bad-soft: #f8e3e1; --other: #9aa3b0;
   --k-in: #b45309; --k-in-soft: #fdf0e1; --k-cum: #6d4fd0; --k-cum-soft: #efeafd;
+  --t-sw: #15803d; --t-sw-soft: #e8f6ed; --t-scv: #be185d; --t-scv-soft: #fdeaf3; --t-sub: #a16207; --t-sub-soft: #fdf6d8; --t-vol: #0e7490; --t-vol-soft: #e2f5f9; --t-wb: #57534e; --t-wb-soft: #f1f0ee;
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   --r: 8px;
@@ -43,6 +44,7 @@
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
   --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
+  --t-sw: #3ec27a; --t-sw-soft: #15301f; --t-scv: #f06aa8; --t-scv-soft: #3a1828; --t-sub: #e3b341; --t-sub-soft: #352b10; --t-vol: #3fbfd8; --t-vol-soft: #10303a; --t-wb: #b5ada6; --t-wb-soft: #2a2826;
   color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #0e1217; --surface: #161b22; --surface-2: #1b212a;
@@ -51,6 +53,7 @@
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
   --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
+  --t-sw: #3ec27a; --t-sw-soft: #15301f; --t-scv: #f06aa8; --t-scv-soft: #3a1828; --t-sub: #e3b341; --t-sub-soft: #352b10; --t-vol: #3fbfd8; --t-vol-soft: #10303a; --t-wb: #b5ada6; --t-wb-soft: #2a2826;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -113,6 +116,7 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .scope-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
 .scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.scope-head .big.months { text-wrap: pretty; font-family: var(--f-body); font-size: 1.45rem; font-weight: 600; color: var(--tot); }
 .dup { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: var(--r); padding: 10px; display: flex; flex-direction: column; gap: 4px; color: var(--ink); word-break: break-word; }
 .disclaimer { margin: 4px 2px 0; font-size: .8rem; color: var(--muted); font-style: italic; }
 .sup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
@@ -154,11 +158,11 @@ td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
 .kpi.mix { grid-column: 1 / -1; border-color: var(--ink-2); background: var(--surface-2); }
 .mix-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 6px; }
 .mix-i { background: var(--surface); border: 2px solid var(--line); border-top-width: 5px; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
-.mix-i.t-sw { border-color: var(--accent); background: var(--accent-soft); }
-.mix-i.t-scv { border-color: var(--k-in); background: var(--k-in-soft); }
-.mix-i.t-sub { border-color: var(--k-cum); background: var(--k-cum-soft); }
-.mix-i.t-vol { border-color: var(--ele); background: var(--ele-soft); }
-.mix-i.t-wb, .mix-i.t-oth { border-color: var(--other); }
+.mix-i.t-sw { border-color: var(--t-sw); background: var(--t-sw-soft); }
+.mix-i.t-scv { border-color: var(--t-scv); background: var(--t-scv-soft); }
+.mix-i.t-sub { border-color: var(--t-sub); background: var(--t-sub-soft); }
+.mix-i.t-vol { border-color: var(--t-vol); background: var(--t-vol-soft); }
+.mix-i.t-wb, .mix-i.t-oth { border-color: var(--t-wb); background: var(--t-wb-soft); }
 .mix-badges { display: flex; flex-wrap: wrap; gap: 8px; }
 .mbadge { border: 2px solid var(--line); background: var(--surface); border-radius: 99px; padding: 4px 12px; font-size: .95rem; font-weight: 600; color: var(--ink-2); }
 .mbadge b { color: var(--ink); font-size: 1.1rem; margin-left: 4px; }
@@ -288,6 +292,12 @@ const nf0 = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
 const fmt = n => nf0.format(Math.round(n || 0));
 const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 const monthLabel = k => { const [y, m] = k.split('-'); return MESI[+m - 1] + ' ' + y; };
+// "Maggio, Giugno, Luglio 2026" — the year once per year
+const monthsList = keys => {
+  const byYear = new Map();
+  [...keys].sort().forEach(k => { const [y, m] = k.split('-'); byYear.set(y, [...(byYear.get(y) || []), MESI[+m - 1]]); });
+  return [...byYear].map(([y, ms]) => `${ms.join(', ')} ${y}`).join(' · ');
+};
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -682,7 +692,7 @@ function render() {
   const selA = S.sel && agentObj(S.sel);
   const nSubs = keys ? keys.size - 1 : 0;
   const agentTxt = !selA ? 'Tutti gli agenti' : esc(selA.name) + (nSubs ? ` <small>+ ${nSubs} sub-agent${nSubs === 1 ? 'e' : 'i'}</small>` : '');
-  const monthsTxt = [...S.selMonths].sort().map(monthLabel).join(', ');
+  const monthsTxt = monthsList(S.selMonths);
   const listMonths = arr => { const c = {}; arr.forEach(r => c[r.month] = (c[r.month] || 0) + 1); return Object.keys(c).sort().map(k => `${monthLabel(k)}: ${fmt(c[k])}`).join(', '); };
   const listV = arr => { const c = {}; arr.forEach(r => c[r.vmonth] = (c[r.vmonth] || 0) + 1); return Object.keys(c).sort().map(k => `${monthLabel(k)}: ${fmt(c[k])}`).join(', '); };
 
@@ -719,7 +729,7 @@ function render() {
   out.innerHTML = (`
     <div class="scope-head">
       <div><span class="lbl">Agente</span><span class="big">${agentTxt}</span></div>
-      <div><span class="lbl">Mese di riferimento</span><span class="big">${esc(monthsTxt)}</span></div>
+      <div><span class="lbl">Mese di riferimento</span><span class="big months">${esc(monthsTxt)}</span></div>
       <button type="button" class="primary pdf" id="pdfBtn">Stampa PDF</button>
     </div>
 
@@ -1053,7 +1063,7 @@ async function exportPdf(section) {
   toast('Preparo il PDF…');
   const root = document.documentElement, prev = root.getAttribute('data-theme');
   const agentTxt = (S.sel && agentObj(S.sel)?.name) || 'Tutti gli agenti';
-  const monthsTxt = [...S.selMonths].sort().map(monthLabel).join(', ');
+  const monthsTxt = monthsList(S.selMonths);
   let blob;
   try {
     S.printing = true; document.body.classList.add('printing');
