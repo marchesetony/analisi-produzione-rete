@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Analisi Contratti</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f5c6e">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Contratti">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<style>
+/* Layout: control rail on the left (file, mesi, agenti, gruppi), report a destra; su telefono si impila. */
+:root {
+  --bg: #f3f5f7; --surface: #ffffff; --surface-2: #f8f9fb;
+  --ink: #141a22; --ink-2: #485263; --muted: #768092; --line: #dde2e8;
+  --accent: #0f5c6e; --accent-soft: #e1eff2;
+  --ele: #2a78d6; --ele-soft: #e3eefb; --gas: #eb6834; --gas-soft: #fdebe3;
+  --tot: #15803d; --tot-soft: #e2f3e8; --warn: #b77900; --warn-soft: #fbf1dc; --bad: #c93b33; --bad-soft: #f8e3e1; --other: #9aa3b0;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --r: 8px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1217; --surface: #161b22; --surface-2: #1b212a;
+  --ink: #eef1f5; --ink-2: #b6bec9; --muted: #8590a0; --line: #2a313b;
+  --accent: #5bbcd0; --accent-soft: #15333b;
+  --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
+  --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e1217; --surface: #161b22; --surface-2: #1b212a;
+  --ink: #eef1f5; --ink-2: #b6bec9; --muted: #8590a0; --line: #2a313b;
+  --accent: #5bbcd0; --accent-soft: #15333b;
+  --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
+  --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45; }
+.app { padding-inline: 16px; padding-block: 18px 40px; max-width: 1500px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 1.5rem; font-weight: 700; }
+h2 { font-size: 1.12rem; font-weight: 600; }
+h3 { font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-2); }
+.top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; margin-bottom: 16px; }
+.top p { margin: 0; color: var(--muted); font-size: .9rem; }
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: env(safe-area-inset-top, 0px); max-height: 100vh; overflow-y: auto; padding-bottom: 8px; }
+@media (max-width: 900px) { .side { position: static; max-height: none; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.between { justify-content: space-between; }
+.muted { color: var(--muted); font-size: .85rem; }
+.small { font-size: .82rem; }
+button, .btn { font: inherit; font-size: .88rem; font-weight: 600; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 6px 11px; cursor: pointer; }
+button:hover, .btn:hover { border-color: var(--accent); }
+button.primary, .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+button.link { border: 0; background: none; padding: 2px 4px; color: var(--accent); font-weight: 600; }
+button:focus-visible, input:focus-visible, select:focus-visible, .btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type=text], input[type=search], select, textarea { font: inherit; font-size: .9rem; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; min-width: 0; }
+.file-drop { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 16px; text-align: center; cursor: pointer; display: block; }
+.file-drop:hover, .file-drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.file-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.file-drop strong { display: block; font-family: var(--f-display); font-weight: 600; }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border-radius: 99px; padding: 2px 9px; }
+.badge.sample { background: var(--warn-soft); color: var(--warn); }
+.badge.real { background: var(--tot-soft); color: var(--tot); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: .85rem; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 99px; padding: 4px 11px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.months label { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font-size: .86rem; min-width: 0; }
+.months label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.months label .n { margin-left: auto; color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; font-weight: 400; }
+.months label.nodata { color: var(--muted); }
+.ruleinfo { background: var(--accent-soft); border-radius: 6px; padding: 8px 10px; font-size: .84rem; }
+.checklist { display: flex; flex-direction: column; gap: 1px; max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
+.checklist label { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: .9rem; }
+.checklist label:hover { background: var(--surface-2); }
+.checklist .n { margin-left: auto; color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.checklist .grp { font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: var(--surface); color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+details.panel > summary { cursor: pointer; font-family: var(--f-display); font-weight: 600; font-size: .95rem; }
+.map-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 6px 8px; align-items: center; font-size: .86rem; }
+.map-grid .miss { color: var(--bad); }
+.rule { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px; align-items: center; font-size: .86rem; }
+
+/* report */
+.report { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.scope { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .9rem; }
+.scope b { font-weight: 600; }
+.scope-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
+.scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.swatches { display: flex; align-items: center; gap: 6px; }
+.sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+.sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.scope-head .pdf { margin-left: auto; align-self: center; }
+.scope-head .big small { font-size: .95rem; font-weight: 500; color: var(--ink-2); }
+/* PDF capture: fixed desktop width, no sidebar */
+body.printing .side, body.printing .top { display: none; }
+body.printing .layout { display: block; }
+body.printing .report { width: 1000px; }
+body.printing .tablewrap { max-height: none !important; overflow: visible !important; }
+body.printing .kpis { grid-template-columns: repeat(4, 1fr); }
+body.printing .charts { grid-template-columns: 1fr 1fr !important; }
+td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
+.warnbox { background: var(--warn-soft); color: var(--ink); border-radius: var(--r); padding: 10px 14px; font-size: .88rem; }
+.warnbox ul { margin: 4px 0 0; padding-left: 18px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 2px; }
+.kpi .lab { font-size: .8rem; color: var(--ink-2); font-weight: 600; }
+.kpi .val { font-family: var(--f-display); font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.kpi .sub { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kpi.si { border-color: var(--tot); background: var(--tot-soft); }
+.kpi.ele { border-top: 3px solid var(--ele); }
+.kpi.gas { border-top: 3px solid var(--gas); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 14px; }
+.card-head p { margin: 2px 0 0; color: var(--muted); font-size: .85rem; max-width: 70ch; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+.tablewrap.tall { max-height: 520px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .88rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { background: var(--surface-2); font-weight: 600; color: var(--ink-2); font-size: .8rem; position: sticky; top: 0; z-index: 1; }
+td.num, th.num { text-align: right; }
+tr.total td { background: var(--tot-soft); font-weight: 700; border-top: 2px solid var(--tot); }
+tr.grp td { font-weight: 700; background: var(--surface-2); }
+tr.member td:first-child { padding-left: 26px; color: var(--ink-2); }
+tr.sum-si td.si { color: var(--tot); font-weight: 700; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.dot.ele { background: var(--ele); } .dot.gas { background: var(--gas); } .dot.unk { background: var(--other); }
+.pill { display: inline-block; font-size: .76rem; font-weight: 700; padding: 1px 8px; border-radius: 99px; }
+.pill.ok { background: var(--tot-soft); color: var(--tot); }
+.pill.ko { background: var(--bad-soft); color: var(--bad); }
+.pill.wait { background: var(--warn-soft); color: var(--warn); }
+.pill.na { background: var(--surface-2); color: var(--muted); }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.chartbox { position: relative; width: 100%; min-width: 0; }
+.empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+
+/* groups overlay */
+.toast { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 8px 16px; border-radius: 6px; font-size: .88rem; z-index: 60; }
+@media (prefers-reduced-motion: no-preference) { .kpi, .card { transition: border-color .15s; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <h1>Analisi Contratti Agenti</h1>
+      <p>Carica l'export Excel, scegli agenti e mesi: il report si aggiorna da solo. Il file resta nel tuo browser, non viene inviato a nessuno.</p>
+    </div>
+    <span id="modeBadge" class="badge sample">Dati di esempio</span>
+  </header>
+
+  <div class="layout">
+    <aside class="side">
+      <section class="panel">
+        <h3>1 · File Excel</h3>
+        <label class="file-drop" id="drop">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.xlsm,.csv">
+          <strong>Scegli o trascina il file</strong>
+          <span class="muted">.xlsx, .xls, .csv</span>
+        </label>
+        <div class="row" id="sheetRow" hidden>
+          <label for="sheetSel" class="small">Foglio</label>
+          <select id="sheetSel" style="flex:1"></select>
+        </div>
+        <div id="fileInfo" class="muted"></div>
+        <button class="link" id="loadSample" type="button" style="align-self:flex-start">Ricarica dati di esempio</button>
+      </section>
+
+      <section class="panel">
+        <div class="row between"><h3>2 · Mesi da estrarre</h3>
+          <select id="yearSel" aria-label="Anno" style="width:auto"></select></div>
+        <div class="months" id="months"></div>
+        <div class="row between small"><span class="muted" id="monthsHint"></span>
+          <span><button class="link" id="monthsAll" type="button">Tutto l'anno</button> · <button class="link" id="monthsNone" type="button">Nessuno</button></span></div>
+      </section>
+
+      <section class="panel">
+        <h3>3 · Agente da analizzare</h3>
+        <input type="search" id="agentSearch" placeholder="Cerca nome agente…" aria-label="Cerca nome agente">
+        <div class="checklist" id="agentList" role="radiogroup" aria-label="Agente"></div>
+      </section>
+
+      <section class="panel" id="subPanel" hidden>
+        <h3>4 · Sub-agenti</h3>
+        <label class="small" style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="subOn" checked> <span id="subOnLabel">Totale gruppo con i sub-agenti</span></label>
+        <div id="subBox" style="display:flex;flex-direction:column;gap:6px">
+          <div class="row between small"><span class="muted">Togli la spunta a chi non vuoi nel totale</span>
+            <span><button class="link" id="subAll" type="button">Tutti</button> · <button class="link" id="subNone" type="button">Nessuno</button></span></div>
+          <div class="checklist" id="subList"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3>5 · Verifica statini <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">(facoltativo)</span></h3>
+        <label class="file-drop" id="stDrop">
+          <input type="file" id="stInput" accept=".pdf" multiple>
+          <strong>Carica gli statini PDF</strong>
+          <span class="muted">Anche più file insieme. Il nome deve essere come “Statino_09_2026_Nome_Agente.pdf”.</span>
+        </label>
+        <div id="stInfo" class="muted small"></div>
+      </section>
+
+      <details class="panel" id="mapPanel">
+        <summary>Colonne e regole</summary>
+        <div class="muted small">Le colonne sono riconosciute in automatico dal nome. Correggi qui se qualcosa non torna.</div>
+        <div class="map-grid" id="mapGrid"></div>
+        <h3 style="margin-top:6px">Competenza validati</h3>
+        <div class="rule"><span class="small">Giorno limite del mese successivo</span><input type="text" id="cutoffDay" inputmode="numeric" value="6" style="width:4em" aria-label="Giorno limite"></div>
+        <h3 style="margin-top:6px">Esclusioni</h3>
+        <div id="rules" style="display:flex;flex-direction:column;gap:8px"></div>
+      </details>
+    </aside>
+
+    <main class="report" id="report"></main>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+'use strict';
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const norm = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nf0 = new Intl.NumberFormat('it-IT', { maximumFractionDigits: 0 });
+const fmt = n => nf0.format(Math.round(n || 0));
+const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const monthLabel = k => { const [y, m] = k.split('-'); return MESI[+m - 1] + ' ' + y; };
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2200); }
+function copyText(text, okMsg) {
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast(okMsg); } catch { toast('Copia non riuscita: seleziona e copia a mano'); } ta.remove(); };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(() => toast(okMsg), fallback); else fallback();
+}
+
+function parseNum(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  let s = String(v ?? '').replace(/[^\d,.\-]/g, '');
+  if (!s) return 0;
+  if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if (s.includes(',')) s = s.replace(',', '.');
+  else if ((s.match(/\./g) || []).length > 1 || /^\-?\d{1,3}\.\d{3}$/.test(s)) s = s.replace(/\./g, '');
+  const n = parseFloat(s); return isFinite(n) ? n : 0;
+}
+// Dates are handled as UTC midnight to avoid timezone shifts.
+function parseDate(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date && !isNaN(v)) return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()));
+  if (typeof v === 'number' && v > 20000 && v < 80000) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 864e5);
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/);
+  if (m) { let y = +m[3]; if (y < 100) y += 2000; const mo = +m[2], d = +m[1]; if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) return new Date(Date.UTC(y, mo - 1, d)); }
+  return null;
+}
+const monthKey = d => d ? d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') : null;
+const fmtDate = d => d ? String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear() : '';
+// ---------- classification ----------
+const isYes = v => {
+  const t = norm(v);
+  if (!t) return false;
+  if (/^(no|ko|non|n|0|false|neg)\b/.test(t) || /\bko\b|non effettuat|negativ|respint|rifiut/.test(t)) return false;
+  return t === '1' || t === 'x' || /\b(si|ok|yes|y|true|validat\w*|valid[oa]|positiv\w*|superat\w*|approvat\w*)\b/.test(t);
+};
+function normSwitch(v) {
+  const t = norm(v).replace(/^switch[\s\-_]*in\s*[:\-]?\s*/, '');
+  if (!t) return '—';
+  if (/attesa|pending|sospes|in corso|lavorazione/.test(t)) return 'ATTESA';
+  if (/^(ko|no)\b|rifiut|annull|scart|negativ|fallit|respint|\bko\b/.test(t)) return 'KO';
+  if (/^(si|ok|yes)\b|\b(si|ok)\b|eseguit|complet|positiv|avvenut/.test(t)) return 'SI';
+  return 'Altro';
+}
+function normCommodity(v, hasK, hasS) {
+  const t = norm(v);
+  if (/gas|smc|metano/.test(t)) return 'GAS';
+  if (/elet|luce|energia|power|kwh|\bee\b|\bele\b/.test(t)) return 'ELE';
+  if (hasK && !hasS) return 'ELE';
+  if (hasS && !hasK) return 'GAS';
+  return '?';
+}
+function normCliente(v) {
+  const t = norm(v);
+  if (!t) return '—';
+  // Two classes only: Privato vs Azienda (every VAT holder: ditta individuale, condominio, associazione, società…)
+  if (/priv|domest|persona fisica|famigl|consumer/.test(t)) return 'Privato';
+  return 'Azienda';
+}
+function normWF(v) { const t = norm(v); if (!t) return S.map.statoWF >= 0 ? 'Stato WF OK' : '—'; if (/\bko\b|negativ|scart|rifiut/.test(t)) return 'Stato WF KO'; if (/\bok\b|positiv|complet/.test(t)) return 'Stato WF OK'; return String(v).trim(); }
+function normPratica(v) { const t = norm(v); if (!t) return '—'; if (/chius/.test(t)) return 'Chiuso'; if (/apert|lavoraz|in corso/.test(t)) return 'Aperto'; return String(v).trim(); }
+
+// ---------- column mapping ----------
+const FIELDS = [
+  { k: 'id', label: 'ID contratto', re: [/^id$/, /^id contratto$|^codice pratica$/] },
+  { k: 'clienteNome', label: 'Nome cliente', re: [/^nome e cognome/, /ragione sociale|^cliente$|denominazione/] },
+  { k: 'agente', label: 'Agente / Agenzia', re: [/^agenzia$/, /^agente$/, /agenzia|agente|venditore|consulente|procacciat|sales/] },
+  { k: 'subAgente', label: 'Sub-agente (colonna Agente)', re: [/^agente$/, /^sub.?agente$/] },
+  { k: 'areaManager', label: 'Area Manager (gerarchia sub-agenti)', re: [/^area manager$/, /area manager|capo area|responsabile/] },
+  { k: 'data', label: 'Data per il mese (inserimento)', re: [/^data inserimento$/, /^data.*inser/, /^data firma$/, /data.*(firma|sottoscr|stipul)|^firma/, /^(data|date)(?!.*(valid|chius|esito|positiv|attivaz|modific|nascita|lettura|fine|ok\b))/] },
+  { k: 'dataOk', label: 'Data esito positivo (chiusura)', re: [/data.*(validaz|esito|positiv)/, /data.*chius/] },
+  { k: 'commodity', label: 'Commodity', re: [/^commodity$/, /commodity|vettore|tipo fornitura|tipo energia/] },
+  { k: 'pod', label: 'Codice POD (luce, se manca Commodity)', re: [/^codice pod$/, /^pod$/] },
+  { k: 'pdr', label: 'Codice PDR (gas, se manca Commodity)', re: [/^codice pdr$/, /^pdr$/] },
+  { k: 'tipoCliente', label: 'Tipo Cliente (Privato / Azienda)', re: [/^tipo cliente$/, /tipo.*cliente|cliente.*tipo|segmento|tipologia cliente|categoria cliente/] },
+  { k: 'tipologia', label: 'Tipologia', re: [/^tipologia$/, /tipologia(?! voltura)|offerta|prodotto|listino/] },
+  { k: 'statoPratica', label: 'Stato Pratica', re: [/stato.*pratica/, /^stato$/] },
+  { k: 'statoWF', label: 'Stato WF', re: [/^stato wf$/, /\bwf\b|workflow/] },
+  { k: 'switchIn', label: 'Switch In', re: [/^switch.?in$/, /^(?!.*(sms|motivaz)).*switch/] },
+  { k: 'precheck', label: 'Pre-check', re: [/^pre.?check$/, /^(?!.*(sms|motivaz)).*pre.?check/] },
+  { k: 'cc', label: 'CC', re: [/^cc$/, /^credit check$/] },
+  { k: 'qc', label: 'QC', re: [/^qc$/, /^quality check$/] },
+  { k: 'validazione', label: 'Validazione', re: [/^validazione$/, /^(?!.*(sms|motivaz|operatore|data)).*validaz/] },
+  { k: 'kwh', label: '🔵 kWh annui', re: [/kwh/, /consumo.*(ele|luce)|(ele|luce).*consumo/, /consumo annu|volume/] },
+  { k: 'smc', label: '🟠 Smc annui', re: [/smc/, /consumo.*gas|gas.*consumo/, /consumo annu|volume/] },
+];
+const REUSABLE = new Set(['kwh', 'smc']);
+function autoMap(headers) {
+  const used = new Set(), map = {};
+  const nh = headers.map(norm);
+  for (const f of FIELDS) {
+    map[f.k] = -1;
+    for (const re of f.re) {
+      const i = nh.findIndex((h, idx) => h && re.test(h) && (!used.has(idx) || (REUSABLE.has(f.k) && REUSABLE.has(map._owner?.[idx]))));
+      if (i >= 0) { map[f.k] = i; used.add(i); (map._owner ||= {})[i] = f.k; break; }
+    }
+  }
+  delete map._owner;
+  return map;
+}
+function autoStatoCol(headers, map) {
+  const nh = headers.map(norm);
+  const i = nh.findIndex((h, idx) => /stato.*switch|switch.*stato/.test(h) && idx !== map.switchIn);
+  return i >= 0 ? i : map.switchIn;
+}
+
+// ---------- gas colour (viewer's choice, remembered in this browser) ----------
+const GAS_COLORS = {
+  rosso: { name: 'Rosso', light: '#d7263d', dark: '#ef4f5f', soft: '#fbe3e6', softDark: '#3d1a1f', dot: '🔴' },
+  verdefluo: { name: 'Verde fluo', light: '#22c55e', dark: '#4ade80', soft: '#dcfce7', softDark: '#123322', dot: '🟢' },
+  giallofluo: { name: 'Giallo fluo', light: '#d4e000', dark: '#e8f227', soft: '#f7fad0', softDark: '#33350f', dot: '🟡' },
+  pisello: { name: 'Verde pisello', light: '#7aa22c', dark: '#97c24a', soft: '#ecf3dc', softDark: '#24301a', dot: '🟢' },
+  arancio: { name: 'Arancio', light: '#eb6834', dark: '#e2652f', soft: '#fdebe3', softDark: '#3a2117', dot: '🟠' },
+};
+function applyGasColor() {
+  const c = GAS_COLORS[S.gasColor] || GAS_COLORS.rosso;
+  const dark = getComputedStyle(document.documentElement).colorScheme === 'dark';
+  document.documentElement.style.setProperty('--gas', dark ? c.dark : c.light);
+  document.documentElement.style.setProperty('--gas-soft', dark ? c.softDark : c.soft);
+}
+const gasDot = () => (GAS_COLORS[S.gasColor] || GAS_COLORS.rosso).dot;
+
+// ---------- state ----------
+const S = {
+  sample: true, wb: null, sheet: '', headers: [], raw: [], map: {}, rules: [],
+  rows: [], agents: [], monthsAll: [], years: [], year: null, cutoff: 6,
+  selMonths: new Set(), search: '', charts: [],
+  gasColor: store.get('ac.gasColor') || 'rosso',
+  sel: '', subOn: true, subOff: new Set()   // sel: chosen agent key ('' = all); subOff: sub-agents unticked
+};
+
+// ---------- data loading ----------
+function detectHeaderRow(aoa) {
+  let best = 0, bestScore = -1;
+  for (let r = 0; r < Math.min(15, aoa.length); r++) {
+    const score = (aoa[r] || []).filter(c => typeof c === 'string' && c.trim() && isNaN(parseNum(c) || NaN)).length
+      + (aoa[r] || []).filter(c => typeof c === 'string' && /[a-z]/i.test(c)).length;
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  return best;
+}
+function useTable(aoa) {
+  const h = detectHeaderRow(aoa);
+  S.headers = (aoa[h] || []).map((c, i) => String(c ?? '').trim() || ('Colonna ' + (i + 1)));
+  S.raw = aoa.slice(h + 1).filter(r => r && r.some(c => c !== '' && c != null));
+  S.map = autoMap(S.headers);
+  S.rules = [
+    { on: true, col: autoStatoCol(S.headers, S.map), val: 'Attesa', label: 'Switch In' },
+    { on: true, col: S.map.precheck, val: 'Non Effettuato', label: 'Pre-check' },
+    // test contracts: entered under the "AM test iBill" account by the test sub-agent
+  ];
+  buildMapUI();
+  process(true);
+}
+function loadSheet(name) {
+  S.sheet = name;
+  const aoa = XLSX.utils.sheet_to_json(S.wb.Sheets[name], { header: 1, raw: true, defval: '' });
+  useTable(aoa);
+}
+function handleFile(file) {
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { toast('Libreria Excel non caricata: controlla la connessione'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      S.wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: false });
+      S.sample = false;
+      const sel = $('sheetSel');
+      sel.innerHTML = S.wb.SheetNames.map(n => `<option>${esc(n)}</option>`).join('');
+      $('sheetRow').hidden = S.wb.SheetNames.length < 2;
+      // pick the sheet with most rows
+      let bestSheet = S.wb.SheetNames[0], bestN = -1;
+      for (const n of S.wb.SheetNames) { const ref = S.wb.Sheets[n]['!ref']; const rows = ref ? XLSX.utils.decode_range(ref).e.r : 0; if (rows > bestN) { bestN = rows; bestSheet = n; } }
+      sel.value = bestSheet;
+      S.fileName = file.name;
+      loadSheet(bestSheet);
+    } catch (err) { console.error(err); toast('Non riesco a leggere il file. È un Excel valido?'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ---------- normalise rows ----------
+function process(resetSelection) {
+  const m = S.map, H = S.headers;
+  const cell = (r, k) => m[k] >= 0 ? r[m[k]] : '';
+  const sameVol = m.kwh >= 0 && m.kwh === m.smc;
+  S.rows = S.raw.map(r => {
+    const kRaw = parseNum(cell(r, 'kwh')), sRaw = parseNum(cell(r, 'smc'));
+    const hasPod = m.pod >= 0 ? String(cell(r, 'pod') ?? '').trim() !== '' : !sameVol && kRaw > 0;
+    const hasPdr = m.pdr >= 0 ? String(cell(r, 'pdr') ?? '').trim() !== '' : !sameVol && sRaw > 0;
+    const com = normCommodity(cell(r, 'commodity'), hasPod && !hasPdr, hasPdr && !hasPod);
+    // a filled "Agente" column means a sub-agent working under the agency in "Agenzia"
+    const agency = String(cell(r, 'agente') ?? '').trim();
+    const agentName = String(cell(r, 'subAgente') ?? '').trim() || agency || '(senza agente)';
+    // hierarchy above the agent, e.g. "Lorenzo Foti,Tony Marchese," → both have this agent as sub-agent
+    const chain = [agency, ...String(cell(r, 'areaManager') ?? '').split(',').map(x => x.trim())].filter(x => x && !/\btest\b/i.test(x));
+    let excluded = null;
+    for (const rule of S.rules) {
+      if (rule.on && rule.col >= 0 && rule.val.trim()) {
+        const t = norm(r[rule.col]), v = norm(rule.val);
+        if (t === v || t.includes(v)) { excluded = rule.label + ' = ' + rule.val; break; }
+      }
+    }
+    const firma = parseDate(cell(r, 'data'));
+    return {
+      code: String(cell(r, 'pod') ?? '').trim() || String(cell(r, 'pdr') ?? '').trim(),
+      id: String(cell(r, 'id') ?? '').trim(), nome: String(cell(r, 'clienteNome') ?? '').trim(),
+      raw: { CC: cell(r, 'cc'), QC: cell(r, 'qc'), Validazione: cell(r, 'validazione'), 'Pre-check': cell(r, 'precheck'), 'Switch In': cell(r, 'switchIn') },
+      agent: agentName, akey: norm(agentName), chain, firma, month: monthKey(firma), okDate: m.dataOk >= 0 ? parseDate(cell(r, 'dataOk')) : null,
+      com, cliente: normCliente(cell(r, 'tipoCliente')),
+      tipologia: String(cell(r, 'tipologia') ?? '').trim() || '—',
+      pratica: normPratica(cell(r, 'statoPratica')), wf: normWF(cell(r, 'statoWF')),
+      sw: m.switchIn >= 0 ? normSwitch(cell(r, 'switchIn')) : '—',
+      cc: isYes(cell(r, 'cc')), qc: isYes(cell(r, 'qc')), val: isYes(cell(r, 'validazione')), pre: isYes(cell(r, 'precheck')),
+      kwh: com === 'ELE' ? kRaw : (com === '?' && !sameVol ? kRaw : 0),
+      smc: com === 'GAS' ? sRaw : (com === '?' && !sameVol ? sRaw : 0),
+      excluded
+    };
+  });
+  applyCompetence();
+  // agents & months
+  const ag = new Map();
+  const get = name => { const k = norm(name); if (!ag.has(k)) ag.set(k, { name, key: k, n: 0, subs: new Set() }); return ag.get(k); };
+  for (const r of S.rows) { const a = get(r.agent); a.name = r.agent; a.n++; }
+  for (const r of S.rows) for (const c of r.chain) if (norm(c) !== r.akey) get(c).subs.add(r.akey);
+  S.agents = [...ag.values()].sort((a, b) => a.name.localeCompare(b.name, 'it'));
+  S.monthsAll = [...new Set(S.rows.flatMap(r => [r.month, r.vmonth]).filter(Boolean))].sort();
+  S.years = [...new Set(S.monthsAll.map(k => +k.slice(0, 4)))].sort();
+  if (!S.years.length) S.years = [new Date().getFullYear()];
+  if (resetSelection) {
+    S.sel = ''; S.subOn = true; S.subOff.clear(); S.selMonths.clear();
+    const firmaMonths = [...new Set(S.rows.map(r => r.month).filter(Boolean))].sort();
+    const last = firmaMonths[firmaMonths.length - 1];
+    if (last) S.selMonths.add(last);
+    S.year = last ? +last.slice(0, 4) : S.years[S.years.length - 1];
+  } else {
+    if (S.sel && !ag.has(S.sel)) S.sel = '';
+    if (!S.years.includes(S.year)) S.year = S.years[S.years.length - 1];
+  }
+  $('modeBadge').className = 'badge ' + (S.sample ? 'sample' : 'real');
+  $('modeBadge').textContent = S.sample ? 'Dati di esempio' : 'File caricato';
+  $('fileInfo').innerHTML = S.sample
+    ? 'Stai guardando <b>dati inventati</b> per mostrare il funzionamento. Carica il tuo file.'
+    : `<b>${esc(S.fileName)}</b>${S.wb && S.wb.SheetNames.length > 1 ? ' · foglio ' + esc(S.sheet) : ''} · ${fmt(S.raw.length)} righe, ${S.headers.length} colonne`;
+  renderMonths(); renderAgents(); render();
+}
+
+// ---------- sidebar UI ----------
+// Competence rule: a contract signed in month M that becomes "all OK" by day `cutoff` of M+1 counts in M;
+// otherwise it counts in the month in which it was closed positively.
+function applyCompetence() {
+  for (const r of S.rows) {
+    r.vmonth = null; r.vNoDate = false; r.shifted = false;
+    if (!isValid(r) || !r.firma) continue;
+    if (!r.okDate) { r.vmonth = r.month; r.vNoDate = true; continue; }
+    // closed by day `cutoff` of a month → counts for the month before; never earlier than the insertion month
+    const closedFor = monthKey(new Date(r.okDate.getTime() - S.cutoff * 864e5));
+    r.vmonth = closedFor > r.month ? closedFor : r.month;
+    r.shifted = r.vmonth !== r.month;
+  }
+}
+const MESI_BREVI = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+function renderMonths() {
+  $('yearSel').innerHTML = S.years.map(y => `<option ${y === S.year ? 'selected' : ''}>${y}</option>`).join('');
+  const cnt = {}; S.rows.forEach(r => { if (r.month) cnt[r.month] = (cnt[r.month] || 0) + 1; });
+  $('months').innerHTML = MESI_BREVI.map((n, i) => {
+    const k = S.year + '-' + String(i + 1).padStart(2, '0');
+    return `<label class="${cnt[k] ? '' : 'nodata'}" title="${MESI[i]} ${S.year}: ${cnt[k] || 0} contratti inseriti"><input type="checkbox" id="m_${k}" data-m="${k}" ${S.selMonths.has(k) ? 'checked' : ''}>${n}<span class="n">${cnt[k] ? fmt(cnt[k]) : ''}</span></label>`;
+  }).join('');
+  const sel = [...S.selMonths].sort();
+  $('monthsHint').textContent = !sel.length ? 'Spunta almeno un mese'
+    : sel.length <= 3 ? sel.map(monthLabel).join(', ') : `${sel.length} mesi selezionati`;
+  if (!S.rows.some(r => r.month)) $('monthsHint').textContent = 'Nessuna data di inserimento riconosciuta: controlla la colonna in “Colonne e regole”.';
+}
+$('months').addEventListener('change', e => {
+  const k = e.target.dataset.m; if (!k) return;
+  e.target.checked ? S.selMonths.add(k) : S.selMonths.delete(k);
+  renderMonths(); render();
+});
+$('yearSel').addEventListener('change', e => { S.year = +e.target.value; renderMonths(); });
+$('monthsAll').onclick = () => { for (let i = 1; i <= 12; i++) S.selMonths.add(S.year + '-' + String(i).padStart(2, '0')); renderMonths(); render(); };
+$('monthsNone').onclick = () => { S.selMonths.clear(); renderMonths(); render(); };
+$('cutoffDay').addEventListener('change', e => {
+  const d = Math.round(parseNum(e.target.value));
+  S.cutoff = d >= 1 && d <= 31 ? d : 6; e.target.value = S.cutoff;
+  applyCompetence(); render();
+});
+
+function agentObj(k) { return S.agents.find(a => a.key === k); }
+function scopeKeys() {
+  if (!S.sel) return null;
+  const a = agentObj(S.sel);
+  const keys = [S.sel];
+  if (a && S.subOn) a.subs.forEach(k => { if (!S.subOff.has(k)) keys.push(k); });
+  return new Set(keys);
+}
+function renderAgents() {
+  const q = norm(S.search);
+  const found = S.agents.filter(a => !q || a.key.includes(q));
+  const radio = (k, label, extra) => `<label><input type="radio" name="agentPick" value="${esc(k)}" ${S.sel === k ? 'checked' : ''}><span>${label}</span><span class="n">${extra}</span></label>`;
+  $('agentList').innerHTML = (q ? '' : radio('', '<b>Tutti gli agenti</b>', fmt(S.rows.length))) +
+    (found.length ? found.map(a => radio(a.key, esc(a.name), (a.n ? fmt(a.n) : '–') + (a.subs.size ? ` · +${a.subs.size} sub` : ''))).join('')
+      : '<span class="muted small" style="padding:6px">Nessun agente trovato</span>');
+  const a = S.sel && agentObj(S.sel);
+  $('subPanel').hidden = !(a && a.subs.size);
+  if (a && a.subs.size) {
+    $('subOn').checked = S.subOn;
+    $('subOnLabel').textContent = `Totale gruppo di ${a.name} con i sub-agenti`;
+    $('subBox').hidden = !S.subOn;
+    $('subList').innerHTML = [...a.subs].map(agentObj).filter(Boolean).sort((x, y) => x.name.localeCompare(y.name, 'it'))
+      .map(s => `<label><input type="checkbox" data-sub="${esc(s.key)}" ${S.subOff.has(s.key) ? '' : 'checked'}><span>${esc(s.name)}</span><span class="n">${fmt(s.n)}</span></label>`).join('');
+  }
+}
+$('agentSearch').addEventListener('input', e => { S.search = e.target.value; renderAgents(); });
+$('agentList').addEventListener('change', e => {
+  if (e.target.name !== 'agentPick') return;
+  S.sel = e.target.value; S.subOn = true; S.subOff.clear();
+  renderAgents(); render();
+});
+$('subOn').addEventListener('change', e => { S.subOn = e.target.checked; renderAgents(); render(); });
+$('subList').addEventListener('change', e => {
+  const k = e.target.dataset.sub; if (k == null) return;
+  e.target.checked ? S.subOff.delete(k) : S.subOff.add(k);
+  render();
+});
+$('subAll').onclick = () => { S.subOff.clear(); renderAgents(); render(); };
+$('subNone').onclick = () => { agentObj(S.sel)?.subs.forEach(k => S.subOff.add(k)); renderAgents(); render(); };
+
+function buildMapUI() {
+  const opts = sel => `<option value="-1">— non presente —</option>` + S.headers.map((h, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(h)}</option>`).join('');
+  $('mapGrid').innerHTML = FIELDS.map(f => `<label for="map_${f.k}" class="${S.map[f.k] < 0 ? 'miss' : ''}">${f.label}</label><select id="map_${f.k}" data-f="${f.k}">${opts(S.map[f.k])}</select>`).join('');
+  $('rules').innerHTML = S.rules.map((r, i) => `
+    <div class="rule"><input type="checkbox" id="rule_on_${i}" data-r="${i}" data-p="on" ${r.on ? 'checked' : ''} aria-label="Attiva esclusione">
+      <span class="small">Escludi se <b>${esc(r.label)}</b> contiene:</span>
+      <span></span><input type="text" id="rule_val_${i}" data-r="${i}" data-p="val" value="${esc(r.val)}">
+      <span></span><select id="rule_col_${i}" data-r="${i}" data-p="col" aria-label="Colonna">${opts(r.col)}</select></div>`).join('');
+  if (Object.entries(S.map).some(([k, v]) => v < 0 && ['agente', 'data', 'commodity', 'kwh', 'smc'].includes(k))) $('mapPanel').open = true;
+}
+$('mapGrid').addEventListener('change', e => { const f = e.target.dataset.f; if (!f) return; S.map[f] = +e.target.value; e.target.previousElementSibling.className = S.map[f] < 0 ? 'miss' : ''; process(false); });
+$('rules').addEventListener('change', e => {
+  const i = e.target.dataset.r; if (i == null) return;
+  const p = e.target.dataset.p, r = S.rules[+i];
+  if (p === 'on') r.on = e.target.checked; else if (p === 'col') r.col = +e.target.value; else r.val = e.target.value;
+  process(false);
+});
+
+// ---------- aggregation ----------
+const isValid = r => r.cc && r.qc && r.val && r.pre && (r.sw === 'SI' || r.sw === 'ATTESA');
+// rowsF: contracts signed in the selected months; rowsV: validated contracts whose competence falls in the selected months.
+function agg(rowsF, rowsV) {
+  const a = { n: 0, kwh: 0, smc: 0, vn: 0, vk: 0, vs: 0, vprev: 0, sn: 0, sk: 0, ss: 0, sw: { SI: 0, ATTESA: 0, KO: 0, Altro: 0, '—': 0 } };
+  for (const r of rowsF) {
+    a.n++; a.kwh += r.kwh; a.smc += r.smc; a.sw[r.sw]++;
+    if (r.sw === 'SI') { a.sn++; a.sk += r.kwh; a.ss += r.smc; }
+  }
+  for (const r of rowsV) { a.vn++; a.vk += r.kwh; a.vs += r.smc; if (!S.selMonths.has(r.month)) a.vprev++; }
+  return a;
+}
+function scopeRows() {
+  const keys = scopeKeys();
+  const base = S.rows.filter(r => !r.excluded && (!keys || keys.has(r.akey)));
+  return { F: base.filter(r => S.selMonths.has(r.month)), V: base.filter(r => r.vmonth && S.selMonths.has(r.vmonth)) };
+}
+
+// ---------- report ----------
+const comCell = c => c === 'ELE' ? '<span class="dot ele"></span>🔵 Elettrico' : c === 'GAS' ? '<span class="dot gas"></span>🟠 Gas' : '<span class="dot unk"></span>Non riconosciuta';
+const swPill = s => `<span class="pill ${s === 'SI' ? 'ok' : s === 'KO' ? 'ko' : s === 'ATTESA' ? 'wait' : 'na'}">${s === '—' ? 'vuoto' : 'Switch In ' + s}</span>`;
+const wfPill = s => `<span class="pill ${/OK$/.test(s) ? 'ok' : /KO$/.test(s) ? 'ko' : 'na'}">${esc(s)}</span>`;
+const vol = (v, unit) => v ? fmt(v) + ' ' + unit : '–';
+
+function render() {
+  S.charts.forEach(c => c.destroy()); S.charts = [];
+  const out = $('report');
+  if (!S.raw.length) { out.innerHTML = '<div class="card empty">Nessuna riga trovata nel foglio.</div>'; return; }
+  if (!S.selMonths.size) { out.innerHTML = '<div class="card empty">Spunta uno o più mesi da estrarre nel pannello a sinistra.</div>'; return; }
+  const { F: rows, V: vrows } = scopeRows();
+  const keys = scopeKeys();
+  const T = agg(rows, vrows);
+  const vIn = vrows.filter(r => !S.selMonths.has(r.month));
+  const vOut = rows.filter(r => r.vmonth && !S.selMonths.has(r.vmonth));
+
+  const selA = S.sel && agentObj(S.sel);
+  const nSubs = keys ? keys.size - 1 : 0;
+  const agentTxt = !selA ? 'Tutti gli agenti' : esc(selA.name) + (nSubs ? ` <small>+ ${nSubs} sub-agent${nSubs === 1 ? 'e' : 'i'}</small>` : '');
+  const monthsTxt = [...S.selMonths].sort().map(monthLabel).join(', ');
+  const listMonths = arr => { const c = {}; arr.forEach(r => c[r.month] = (c[r.month] || 0) + 1); return Object.keys(c).sort().map(k => `${monthLabel(k)}: ${fmt(c[k])}`).join(', '); };
+  const listV = arr => { const c = {}; arr.forEach(r => c[r.vmonth] = (c[r.vmonth] || 0) + 1); return Object.keys(c).sort().map(k => `${monthLabel(k)}: ${fmt(c[k])}`).join(', '); };
+
+  // validated by commodity × client type
+  const cliOrd = { Privato: 0, Azienda: 1 };
+  const clienti = ['Privato', 'Azienda', ...new Set(vrows.map(r => r.cliente).filter(c => !(c in cliOrd)))];
+  const t2 = [];
+  for (const com of ['ELE', 'GAS']) for (const cl of clienti) {
+    const sub = vrows.filter(r => r.com === com && r.cliente === cl);
+    if (!sub.length) continue;   // no empty rows
+    t2.push({ com, cl, n: sub.length, kwh: sub.reduce((s, r) => s + r.kwh, 0), smc: sub.reduce((s, r) => s + r.smc, 0) });
+  }
+  const unkValid = vrows.filter(r => r.com === '?');
+
+  // per-agent detail: validated contracts only
+  const entities = buildEntities(vrows);
+
+  // contracts signed in the period that did not pass (test contracts left out)
+  const scopeAll = S.rows.filter(r => S.selMonths.has(r.month) && (!keys || keys.has(r.akey)) );
+  const invalid = scopeAll.filter(r => r.excluded || !isValid(r)).sort((a, b) => a.agent.localeCompare(b.agent, 'it') || (a.firma - b.firma));
+  // failing checks grouped by value, e.g. "CC, QC, Validazione: Attesa · Pre-check: Non effettuato"
+  const reasonOf = r => {
+    const bad = { CC: !r.cc, QC: !r.qc, Validazione: !r.val, 'Pre-check': !r.pre, 'Switch In': !(r.sw === 'SI' || r.sw === 'ATTESA') };
+    const byVal = new Map();
+    for (const [k, isBad] of Object.entries(bad)) {
+      if (!isBad && !(r.excluded || '').startsWith(k)) continue;
+      const v = String(r.raw[k] ?? '').trim() || 'vuoto';
+      byVal.set(v, [...(byVal.get(v) || []), k]);
+    }
+    return [...byVal].map(([v, ks]) => `${ks.join(', ')}: ${v}`).join(' · ') || r.excluded || '';
+  };
+
+  applyGasColor();
+  out.innerHTML = (`
+    <div class="scope-head">
+      <div><span class="lbl">Agente</span><span class="big">${agentTxt}</span></div>
+      <div><span class="lbl">Mese di riferimento</span><span class="big">${esc(monthsTxt)}</span></div>
+      <button type="button" class="primary pdf" id="pdfBtn">Stampa PDF</button>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti` : `su ${fmt(T.n)} inseriti`}</span></div>
+      <div class="kpi ele"><span class="lab">🔵 Luce validati</span><span class="val">${fmt(T.vk)} <small style="font-size:.9rem">kWh</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'ELE').length)} contratti</span></div>
+      <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
+      <div class="kpi si"><span class="lab">🟢 Switch In SI</span><span class="val">${fmt(T.sn)}</span><span class="sub">${fmt(T.sk)} kWh · ${fmt(T.ss)} Smc</span></div>
+    </div>
+
+    <section class="card">
+      <div class="card-head"><div><h2>🎯 Contratti validati</h2></div>
+        <button type="button" data-copy="t2">Copia tabella</button></div>
+      ${vIn.length || vOut.length ? `<div class="ruleinfo">
+        ${vIn.length ? `<div>➕ <b>${fmt(vIn.length)}</b> inseriti in mesi precedenti e chiusi dopo il ${S.cutoff}: inclusi qui (${esc(listMonths(vIn))}).</div>` : ''}
+        ${vOut.length ? `<div>➡️ <b>${fmt(vOut.length)}</b> inseriti in questo periodo ma chiusi dopo il ${S.cutoff}: vanno in ${esc(listV(vOut))}.</div>` : ''}
+      </div>` : ''}
+      <div class="tablewrap"><table id="t2">
+        <thead><tr><th>Commodity</th><th>Tipo Cliente</th><th class="num">N° Contratti</th><th class="num">🔵 kWh Annui</th><th class="num">🟠 Smc Annui</th></tr></thead>
+        <tbody>${t2.map(x => `<tr><td>${comCell(x.com)}</td><td>${esc(x.cl)}</td><td class="num">${fmt(x.n)}</td><td class="num">${x.com === 'ELE' ? fmt(x.kwh) + ' kWh' : '–'}</td><td class="num">${x.com === 'GAS' ? fmt(x.smc) + ' Smc' : '–'}</td></tr>`).join('')}
+        ${unkValid.length ? `<tr><td>${comCell('?')}</td><td>Tutti</td><td class="num">${fmt(unkValid.length)}</td><td class="num">${vol(unkValid.reduce((s, r) => s + r.kwh, 0), 'kWh')}</td><td class="num">${vol(unkValid.reduce((s, r) => s + r.smc, 0), 'Smc')}</td></tr>` : ''}
+        <tr class="total"><td>🟢 TOTALE</td><td>Tutti</td><td class="num">${fmt(T.vn)}</td><td class="num">${fmt(T.vk)} kWh</td><td class="num">${fmt(T.vs)} Smc</td></tr></tbody>
+      </table></div>
+    </section>
+
+    ${entities.length > 1 ? `<section class="card">
+      <div class="card-head"><div><h2>Dettaglio per agente</h2><p>Solo contratti validati.</p></div>
+        <button type="button" data-copy="tcmp">Copia tabella</button></div>
+      <div class="tablewrap"><table id="tcmp">
+        <thead><tr><th>Agente</th><th class="num">Validati</th><th class="num">🔵 Contratti luce</th><th class="num">🔵 kWh</th><th class="num">🟠 Contratti gas</th><th class="num">🟠 Smc</th></tr></thead>
+        <tbody>${entities.map(e => cmpRow(e.name, e.a, '')).join('')}${cmpRow(nSubs ? '🟢 TOTALE GRUPPO' : '🟢 TOTALE', aggV(vrows), 'total')}</tbody>
+      </table></div>
+    </section>` : ''}
+
+    <section class="card">
+      <div class="card-head"><div><h2>Validati luce e gas</h2><p>${esc(monthsTxt)}: volumi e numero di contratti validati.</p></div>
+        <div class="swatches" role="group" aria-label="Colore del gas"><span class="muted small">Colore gas</span>${Object.entries(GAS_COLORS).map(([k, c]) => `<button type="button" class="sw" data-gas="${k}" title="${c.name}" aria-label="${c.name}" aria-pressed="${S.gasColor === k}" style="background:${c.light}"></button>`).join('')}</div></div>
+      <div class="charts" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))">
+        <div><h3 style="margin-bottom:8px">Volumi</h3><div class="chartbox" id="cbV"><canvas id="chV" role="img" aria-label="Volumi validati luce in kWh e gas in Smc"></canvas></div></div>
+        <div><h3 style="margin-bottom:8px">Numero contratti</h3><div class="chartbox" id="cbN"><canvas id="chN" role="img" aria-label="Numero di contratti validati luce e gas"></canvas></div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><div><h2>Contratti non validi · ${fmt(invalid.length)}</h2><p>Inseriti nel periodo ma senza tutti i controlli OK, con il motivo.</p></div>
+        ${invalid.length ? '<button type="button" data-copy="tinv">Copia tabella</button>' : ''}</div>
+      ${invalid.length ? `<div class="tablewrap tall"><table id="tinv">
+        <thead><tr><th>Agente</th><th>${esc(S.headers[S.map.data] || 'Data')}</th><th>ID</th><th>Cliente</th><th>Commodity</th><th class="num">Volume</th><th>Motivo</th></tr></thead>
+        <tbody>${invalid.map(r => `<tr><td>${esc(r.agent)}</td><td>${fmtDate(r.firma)}</td><td>${esc(r.id)}</td><td>${esc(r.nome)}</td><td>${comCell(r.com)}</td><td class="num">${r.com === 'GAS' ? fmt(r.smc) + ' Smc' : fmt(r.kwh) + ' kWh'}</td><td class="reason">${esc(reasonOf(r))}</td></tr>`).join('')}</tbody>
+      </table></div>` : '<p class="muted" style="margin:0">Tutti i contratti inseriti nel periodo hanno passato i controlli.</p>'}
+    </section>
+    ${statiniCard()}`).replaceAll('🟠', gasDot());
+  drawCharts();
+}
+function aggV(vrows) {
+  const a = { n: 0, ne: 0, ng: 0, kwh: 0, smc: 0 };
+  for (const r of vrows) { a.n++; if (r.com === 'ELE') { a.ne++; a.kwh += r.kwh; } else if (r.com === 'GAS') { a.ng++; a.smc += r.smc; } }
+  return a;
+}
+function cmpRow(name, a, cls) {
+  return `<tr class="${cls}"><td>${esc(name)}</td><td class="num">${fmt(a.n)}</td><td class="num">${fmt(a.ne)}</td><td class="num">${fmt(a.kwh)}</td><td class="num">${fmt(a.ng)}</td><td class="num">${fmt(a.smc)}</td></tr>`;
+}
+function buildEntities(vrows) {
+  const V = new Map();
+  for (const r of vrows) (V.get(r.akey) || V.set(r.akey, []).get(r.akey)).push(r);
+  const multi = scopeKeys()?.size > 1;
+  const nameOf = k => (agentObj(k)?.name || k) + (k === S.sel && multi ? ' (propri)' : '');
+  return [...V.keys()].map(k => ({ k, name: nameOf(k), a: aggV(V.get(k)) }))
+    .sort((x, y) => (y.k === S.sel) - (x.k === S.sel) || y.a.n - x.a.n);
+}
+
+// ---------- chart ----------
+function tok(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function drawCharts() {
+  if (typeof Chart === 'undefined') return;
+  const ink = tok('--ink'), ink2 = tok('--ink-2'), grid = tok('--line'), font = tok('--f-body'), surface = tok('--surface');
+  const ele = tok('--ele'), gas = tok('--gas');
+  Chart.defaults.color = ink2; Chart.defaults.font = { family: font, size: 12 }; Chart.defaults.borderColor = grid;
+  const months = [...S.selMonths].sort();
+  const keys = scopeKeys();
+  const V = S.rows.filter(r => !r.excluded && r.vmonth && S.selMonths.has(r.vmonth) && (!keys || keys.has(r.akey)));
+  const per = (mk, com, f) => V.filter(r => r.vmonth === mk && r.com === com).reduce((s, r) => s + r[f], 0);
+  const kwh = months.map(m => per(m, 'ELE', 'kwh')), smc = months.map(m => per(m, 'GAS', 'smc'));
+  const labels = months.map(monthLabel);
+  const valueLabels = { id: 'valueLabels', afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    ctx.save(); ctx.fillStyle = ink; ctx.font = `700 12px ${font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    chart.data.datasets.forEach((ds, di) => chart.getDatasetMeta(di).data.forEach((b, i) => {
+      if (ds.data[i]) ctx.fillText(`${fmt(ds.data[i])} ${ds.unit}`, b.x, b.y - 4);
+    }));
+    ctx.restore();
+  } };
+  // volumes: luce on the left kWh axis, gas on the right Smc axis (each axis coloured like its bars)
+  $('cbV').style.height = '300px';
+  S.charts.push(new Chart($('chV'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Luce (kWh)', unit: 'kWh', data: kwh, yAxisID: 'yk', backgroundColor: ele, borderRadius: 4, borderSkipped: 'start', maxBarThickness: 56 },
+      { label: 'Gas (Smc)', unit: 'Smc', data: smc, yAxisID: 'ys', backgroundColor: gas, borderRadius: 4, borderSkipped: 'start', maxBarThickness: 56 },
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { top: 22 } },
+      plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${fmt(c.parsed.y)}` } } },
+      scales: {
+        yk: { position: 'left', beginAtZero: true, grace: '12%', grid: { color: grid }, ticks: { color: ele, callback: v => fmt(v), maxTicksLimit: 6 }, title: { display: true, text: 'kWh', color: ele } },
+        ys: { position: 'right', beginAtZero: true, grace: '12%', grid: { display: false }, ticks: { color: gas, callback: v => fmt(v), maxTicksLimit: 6 }, title: { display: true, text: 'Smc', color: gas } },
+        x: { grid: { display: false } }
+      }
+    },
+    plugins: [valueLabels]
+  }));
+  // contract count: doughnut luce vs gas with the total in the middle
+  const nE = V.filter(r => r.com === 'ELE').length, nG = V.filter(r => r.com === 'GAS').length;
+  $('cbN').style.height = '300px';
+  S.charts.push(new Chart($('chN'), {
+    type: 'doughnut',
+    data: { labels: [`Luce · ${nE} contratti`, `Gas · ${nG} contratti`], datasets: [{ data: [nE, nG], backgroundColor: [ele, gas], borderColor: surface, borderWidth: 2 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false, cutout: '62%',
+      plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } },
+        tooltip: { callbacks: { label: c => ` ${c.parsed} contratti` } } }
+    },
+    plugins: [{ id: 'center', afterDraw(chart) {
+      const { ctx, chartArea: a } = chart, cx = (a.left + a.right) / 2, cy = (a.top + a.bottom) / 2;
+      ctx.save(); ctx.textAlign = 'center'; ctx.fillStyle = ink;
+      ctx.font = `700 30px ${tok('--f-display')}`; ctx.textBaseline = 'bottom'; ctx.fillText(nE + nG, cx, cy + 6);
+      ctx.font = `500 12px ${font}`; ctx.fillStyle = ink2; ctx.textBaseline = 'top'; ctx.fillText('contratti', cx, cy + 8);
+      // counts on the segments
+      ctx.font = `700 13px ${font}`; ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+      chart.getDatasetMeta(0).data.forEach((arc, i) => { const v = [nE, nG][i]; if (v) { const p = arc.tooltipPosition(); ctx.fillText(v, p.x, p.y); } });
+      ctx.restore();
+    } }]
+  }));
+}
+
+// ---------- statini check ----------
+// A statino named Statino_MM_YYYY_Name.pdf pays in month MM the points produced (validated) in month MM-1.
+const nameKey = s => norm(s).replace(/[^a-z]/g, '');
+const POINT_RE = /IT\d{3}E\d{7}[\dA-Z]|(?<!\d)\d{14}(?!\d)/g;
+S.statini = [];
+async function readStatino(file) {
+  const m = file.name.match(/statino[_ -]?(\d{1,2})[_ -](\d{4})[_ -](.+?)(?:[-_ ]errata.*|\s*\(\d+\))?\.pdf$/i);
+  if (!m) return { file: file.name, error: 'nome file non riconosciuto' };
+  const pay = new Date(Date.UTC(+m[2], +m[1] - 1, 1));
+  const prod = monthKey(new Date(Date.UTC(pay.getUTCFullYear(), pay.getUTCMonth() - 1, 1)));
+  const name = m[3].replace(/_/g, ' ').trim();
+  const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const points = new Set();
+  for (let i = 1; i <= doc.numPages; i++) {
+    const tc = await (await doc.getPage(i)).getTextContent();
+    const lines = tc.items.map(it => it.str + (it.hasEOL ? '\n' : '')).join('').split('\n');
+    // only the new-contract lines ("Gettone 75.0"): recurring, variable and surcharge lines repeat old points
+    for (const l of lines) if (/Gettone\s*\d/i.test(l)) (l.match(POINT_RE) || []).forEach(x => points.add(x));
+  }
+  return { file: file.name, name, key: nameKey(name), prod, points };
+}
+async function handleStatini(files) {
+  if (!window.pdfjsLib) { toast('Lettore PDF non caricato: controlla la connessione'); return; }
+  if (!S.raw.length || S.sample) { toast('Carica prima il file Excel dei contratti'); return; }
+  $('stInfo').textContent = 'Leggo gli statini…';
+  for (const f of files) {
+    try {
+      const st = await readStatino(f);
+      S.statini = S.statini.filter(x => x.file !== st.file).concat(st);
+    } catch (e) { console.error(e); S.statini.push({ file: f.name, error: 'PDF non leggibile' }); }
+  }
+  $('stInfo').innerHTML = `${S.statini.length} statini caricati · <button class="link" type="button" id="stClear">Togli tutti</button>`;
+  render();
+  document.getElementById('statiniCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+$('stInput').addEventListener('change', e => { handleStatini([...e.target.files]); e.target.value = ''; });
+['dragenter', 'dragover'].forEach(ev => $('stDrop').addEventListener(ev, e => { e.preventDefault(); $('stDrop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => $('stDrop').addEventListener(ev, e => { e.preventDefault(); $('stDrop').classList.remove('over'); }));
+$('stDrop').addEventListener('drop', e => handleStatini([...e.dataTransfer.files].filter(f => /\.pdf$/i.test(f.name))));
+$('stInfo').addEventListener('click', e => { if (e.target.id === 'stClear') { S.statini = []; $('stInfo').textContent = ''; render(); } });
+
+function statiniCard() {
+  if (!S.statini.length) return '';
+  const byCode = new Map();
+  for (const r of S.rows) if (r.code && !byCode.has(r.code)) byCode.set(r.code, r);
+  const paidWhere = new Map();   // point → statini that pay it
+  for (const st of S.statini) if (st.points) for (const x of st.points) paidWhere.set(x, [...(paidWhere.get(x) || []), st]);
+  const rowsOut = [], summary = [];
+  for (const st of [...S.statini].sort((a, b) => (a.prod || '').localeCompare(b.prod || '') || (a.name || '').localeCompare(b.name || ''))) {
+    if (st.error) { summary.push(`<tr><td colspan="6">${esc(st.file)}: ${esc(st.error)}</td></tr>`); continue; }
+    const app = new Set(S.rows.filter(r => r.code && r.vmonth === st.prod && !r.excluded && nameKey(r.agent) === st.key).map(r => r.code));
+    const common = [...st.points].filter(x => app.has(x)).length;
+    const onlySt = [...st.points].filter(x => !app.has(x)), onlyApp = [...app].filter(x => !st.points.has(x));
+    summary.push(`<tr class="${onlySt.length || onlyApp.length ? '' : 'ok-row'}"><td>${esc(st.name)}</td><td>${monthLabel(st.prod)}</td><td class="num">${st.points.size}</td><td class="num">${app.size}</td><td class="num">${common}</td><td>${onlySt.length || onlyApp.length ? `<span class="pill wait">${onlySt.length + onlyApp.length} da controllare</span>` : '<span class="pill ok">Tutto torna</span>'}</td></tr>`);
+    for (const x of onlySt) {
+      const r = byCode.get(x);
+      let why = 'Punto non presente nell’export';
+      if (r && !isValid(r)) why = 'Pagato, ma oggi nell’export non è più tutto OK (pratica riaperta?)';
+      else if (r && r.excluded) why = `Pagato, ma escluso da una regola (${r.excluded})`;
+      else if (r && r.vmonth !== st.prod) why = `Pagato in un mese diverso: per i dati è di ${monthLabel(r.vmonth)}`;
+      else if (r && nameKey(r.agent) !== st.key) why = `Pagato a ${st.name}, ma nell’export è di ${r.agent}`;
+      rowsOut.push({ st, x, r, kind: 'Pagato, non atteso', why, cls: 'wait' });
+    }
+    for (const x of onlyApp) {
+      const r = byCode.get(x), other = (paidWhere.get(x) || []).filter(o => o !== st);
+      const why = other.length ? `Pagato in un altro statino: ${other.map(o => `${o.name} ${monthLabel(o.prod)}`).join(', ')}`
+        : '⚠️ Valido ma non trovato negli statini caricati: da segnalare';
+      rowsOut.push({ st, x, r, kind: other.length ? 'Pagato altrove' : 'Non pagato', why, cls: other.length ? 'wait' : 'ko' });
+    }
+  }
+  const f = d => d ? fmtDate(d) : '–';
+  return `<section class="card" id="statiniCard">
+    <div class="card-head"><div><h2>Verifica statini</h2><p>Ogni statino paga i punti (POD e PDR) validati nel mese precedente.</p></div>
+      <button type="button" data-copy="tst">Copia tabella</button></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Agente</th><th>Mese di produzione</th><th class="num">Pagati</th><th class="num">Attesi</th><th class="num">In comune</th><th>Esito</th></tr></thead>
+      <tbody>${summary.join('')}</tbody></table></div>
+    ${rowsOut.length ? `<div class="tablewrap tall"><table id="tst">
+      <thead><tr><th>Agente</th><th>Mese</th><th>Esito</th><th>ID</th><th>POD / PDR</th><th>Inserito</th><th>Chiuso</th><th>Motivo</th></tr></thead>
+      <tbody>${rowsOut.map(o => `<tr><td>${esc(o.st.name)}</td><td>${monthLabel(o.st.prod)}</td><td><span class="pill ${o.cls}">${o.kind}</span></td><td>${esc(o.r?.id || '–')}</td><td>${esc(o.x)}</td><td>${f(o.r?.firma)}</td><td>${f(o.r?.okDate)}</td><td class="reason">${esc(o.why)}</td></tr>`).join('')}</tbody>
+    </table></div>` : '<p class="muted" style="margin:0">Tutti i punti degli statini corrispondono a quelli attesi.</p>'}
+  </section>`;
+}
+
+// ---------- PDF (A4, 1 cm margins, one page) ----------
+async function exportPdf() {
+  if (!window.jspdf || !window.html2canvas) { toast('Libreria PDF non caricata: controlla la connessione'); return; }
+  const btn = $('pdfBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Preparo il PDF…'; }
+  const root = document.documentElement, prev = root.getAttribute('data-theme');
+  const agentTxt = (S.sel && agentObj(S.sel)?.name) || 'Tutti gli agenti';
+  const monthsTxt = [...S.selMonths].sort().map(monthLabel).join(', ');
+  let blob;
+  try {
+    S.printing = true; document.body.classList.add('printing');
+    root.setAttribute('data-theme', 'light');   // the PDF is always light
+    await new Promise(r => setTimeout(r, 60));
+    render();
+    const el = $('report');
+    const canvas = await html2canvas(el, {
+      scale: 2, backgroundColor: '#ffffff', useCORS: true,
+      ignoreElements: n => n.matches?.('[data-copy], #pdfBtn, .swatches'),
+      onclone: doc => doc.querySelectorAll('.tablewrap').forEach(t => { t.style.maxHeight = 'none'; t.style.overflow = 'visible'; })
+    });
+    const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const maxW = 190, maxH = 277 - 5;            // 1 cm margins, 5 mm kept for the footer
+    let w = maxW, h = canvas.height * w / canvas.width;
+    if (h > maxH) { h = maxH; w = canvas.width * h / canvas.height; }
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, 10, w, h);
+    pdf.setFontSize(8); pdf.setTextColor(120);
+    pdf.text(`Analisi Contratti Agenti · generato il ${new Date().toLocaleDateString('it-IT')}`, 10, 287);
+    blob = pdf.output('blob');
+  } catch (err) {
+    console.error(err); toast('Non sono riuscito a creare il PDF');
+  } finally {
+    S.printing = false; document.body.classList.remove('printing');
+    prev == null ? root.removeAttribute('data-theme') : root.setAttribute('data-theme', prev);
+    await new Promise(r => setTimeout(r, 0));
+    render();
+  }
+  if (!blob) return;
+  const filename = `Report ${agentTxt} ${monthsTxt}.pdf`.replace(/[\\/:*?"<>|]/g, '-');
+  const dl = window.claude?.use ? await window.claude.use('downloads') : null;
+  if (dl) {
+    try { await dl.save({ filename, data: blob }); toast('PDF salvato'); }
+    catch (e) { if (e?.code !== 'declined') toast('Il salvataggio del PDF non è disponibile qui'); }
+  } else {
+    // outside claude.ai: share sheet on iPhone/iPad (Save to Files), plain download elsewhere
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+    if (ios && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: filename }); } catch (e) { if (e?.name !== 'AbortError') toast('Condivisione non riuscita'); }
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+  }
+}
+$('report').addEventListener('click', e => {
+  if (e.target.closest('#pdfBtn')) exportPdf();
+  const sw = e.target.closest('[data-gas]');
+  if (sw) { S.gasColor = sw.dataset.gas; store.set('ac.gasColor', S.gasColor); render(); }
+});
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => render()); } catch {}
+new MutationObserver(() => render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+// ---------- copy tables ----------
+$('report').addEventListener('click', e => {
+  const b = e.target.closest('[data-copy]'); if (!b) return;
+  const t = $(b.dataset.copy);
+  const tsv = [...t.rows].map(tr => [...tr.cells].map(c => c.innerText.replace(/\s+/g, ' ').trim()).join('\t')).join('\n');
+  copyText(tsv, 'Tabella copiata: incollala in Excel');
+});
+
+// ---------- file input wiring ----------
+$('fileInput').addEventListener('change', e => handleFile(e.target.files[0]));
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+$('sheetSel').addEventListener('change', e => loadSheet(e.target.value));
+
+// ---------- sample data (fictitious) ----------
+function sampleData() {
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const pick = (arr, w) => { if (!w) return arr[Math.floor(rnd() * arr.length)]; let x = rnd() * w.reduce((a, b) => a + b, 0); for (let i = 0; i < arr.length; i++) { x -= w[i]; if (x <= 0) return arr[i]; } return arr[arr.length - 1]; };
+  const agents = ['Agenzia Esempio Alfa', 'Agenzia Esempio Beta', 'Agenzia Esempio Gamma', 'Agenzia Esempio Delta', 'Agenzia Esempio Epsilon', 'Agenzia Esempio Zeta', 'Agenzia Esempio Eta'];
+  const chainOf = { 'Agenzia Esempio Alfa': 'Agenzia Esempio Alfa,Area Manager Esempio,', 'Agenzia Esempio Beta': 'Agenzia Esempio Alfa,Area Manager Esempio,', 'Agenzia Esempio Gamma': 'Agenzia Esempio Alfa,Area Manager Esempio,',
+    'Agenzia Esempio Delta': 'Agenzia Esempio Delta,Area Manager Esempio,', 'Agenzia Esempio Epsilon': 'Agenzia Esempio Delta,Area Manager Esempio,' };
+  const head = ['Area Manager', 'Agenzia', 'Data Firma', 'Commodity', 'Tipo Cliente', 'Tipologia Offerta', 'Stato Pratica', 'Stato WF', 'Switch In', 'Pre-check', 'CC', 'QC', 'Validazione', 'Data Validazione', 'kWh Annui', 'Smc Annui'];
+  const rows = [head];
+  for (let i = 0; i < 420; i++) {
+    const com = pick(['Elettrico', 'Gas'], [6, 4]);
+    const cli = pick(['Privato', 'Azienda', 'Ditta Individuale'], [6, 2, 2]);
+    const month = pick([6, 7, 8, 9], [2, 3, 3, 2]);
+    const day = 1 + Math.floor(rnd() * 28);
+    const sw = pick(['Switch In SI', 'Switch In ATTESA', 'Switch In KO', 'Switch in Attesa'], [6, 2, 1, 1]);
+    const k = com === 'Elettrico' ? Math.round((cli === 'Privato' ? 1500 + rnd() * 2500 : 8000 + rnd() * 60000)) : '';
+    const s = com === 'Gas' ? Math.round((cli === 'Privato' ? 500 + rnd() * 1200 : 3000 + rnd() * 20000)) : '';
+    const okD = new Date(Date.UTC(2026, month - 1, day + Math.floor(rnd() * rnd() * 55)));
+    const agent = pick(agents, [5, 4, 4, 3, 2, 2, 1]);
+    rows.push([chainOf[agent] || 'Area Manager Esempio,', agent, `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/2026`, com, cli,
+      com === 'Elettrico' ? pick(['Luce Fissa 12', 'Luce Variabile', 'Luce Green']) : pick(['Gas Fisso 12', 'Gas Variabile']),
+      pick(['Chiuso', 'Aperto'], [7, 3]), pick(['Stato WF OK', 'Stato WF KO'], [85, 15]), sw,
+      pick(['OK', 'Non Effettuato', 'KO'], [85, 10, 5]), pick(['SI', 'NO'], [9, 1]), pick(['SI', 'NO'], [9, 1]), pick(['SI', 'NO'], [88, 12]), fmtDate(okD), k, s]);
+  }
+  return rows;
+}
+function loadSample() {
+  S.sample = true; S.wb = null; $('sheetRow').hidden = true; $('fileInput').value = '';
+  useTable(sampleData());
+}
+$('loadSample').onclick = loadSample;
+loadSample();
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
+</body>
+</html>
