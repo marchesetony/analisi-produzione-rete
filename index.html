@@ -145,6 +145,11 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 body.printing .side, body.printing .top { display: none; }
 body.printing .layout { display: block; }
 body.printing .report { width: 1000px; }
+/* main PDF on one A4 page: wide two-column layout, header, growth chart and tiles across both columns */
+body.printing.onepage .report { width: 1500px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+body.printing.onepage .report > .scope-head, body.printing.onepage .report > #growthCard, body.printing.onepage .report > .kpis { grid-column: 1 / -1; }
+body.printing.onepage .report { grid-auto-flow: row dense; }
+body.printing.onepage #agentCard { grid-column: 2; grid-row: span 3; }
 body.printing .tablewrap { max-height: none !important; overflow: visible !important; }
 body.printing .scope-head .big { text-wrap: wrap; white-space: nowrap; }
 body.printing .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -804,7 +809,7 @@ function render() {
       </table></div>
     </section>
 
-    ${entities.length > 1 ? `<section class="card">
+    ${entities.length > 1 ? `<section class="card" id="agentCard">
       <div class="card-head"><div><h2>Dettaglio per agente</h2><p>Solo contratti validati.</p></div>
         <button type="button" data-copy="tcmp">Copia tabella</button></div>
       <div class="tablewrap"><table id="tcmp">
@@ -1424,7 +1429,7 @@ async function exportPdf(section) {
   const monthsTxt = monthsList(S.selMonths);
   let blob;
   try {
-    S.printing = true; document.body.classList.add('printing');
+    S.printing = true; document.body.classList.add('printing'); if (!section) document.body.classList.add('onepage');
     root.setAttribute('data-theme', 'light');   // the PDF is always light
     await new Promise(r => setTimeout(r, 60));
     render();
@@ -1440,17 +1445,11 @@ async function exportPdf(section) {
     const footer = () => { pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')} · Salvo errori e omissioni`, 10, 287); };
     const maxW = 190, maxH = 277 - 5;            // 1 cm margins, 5 mm kept for the footer
     if (!section) {
-      // full A4 width: each block of the report is placed at 19 cm wide, moving to a new page when it does not fit
-      const blocks = [...$('report').children].filter(b => !b.matches('#statiniCard, #pointsCard, #simCard, .disclaimer'));
-      let y = 10;
-      for (const b of blocks) {
-        const c = await shot(b);
-        let w = maxW, h = c.height * w / c.width;
-        if (h > maxH) { h = maxH; w = c.width * h / c.height; }   // a block taller than a page is shrunk to fit
-        if (y > 10 && y + h > 10 + maxH) { footer(); pdf.addPage(); y = 10; }
-        pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, y, w, h);
-        y += h + 4;
-      }
+      // one A4 page: the two-column print layout is scaled to the full width, or to the page height if taller
+      const c = await shot($('report'));
+      let w = maxW, h = c.height * w / c.width;
+      if (h > maxH) { h = maxH; w = c.width * h / c.height; }
+      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, 10, w, h);
       footer();
     } else {
       // heading on each page, then the section cut into page-high slices
@@ -1468,7 +1467,7 @@ async function exportPdf(section) {
   } catch (err) {
     console.error(err); toast('Non sono riuscito a creare il PDF');
   } finally {
-    S.printing = false; document.body.classList.remove('printing');
+    S.printing = false; document.body.classList.remove('printing', 'onepage');
     prev == null ? root.removeAttribute('data-theme') : root.setAttribute('data-theme', prev);
     await new Promise(r => setTimeout(r, 0));
     render();
@@ -1568,7 +1567,7 @@ loadSample();
 
 <script>
 // version shown in the header, so it is easy to see which one is open
-window.APP_VERSION = '15/10/2026 18:43';
+window.APP_VERSION = '15/10/2026 18:52';
 document.addEventListener('DOMContentLoaded', () => { const p = document.querySelector('.top p'); if (p) p.insertAdjacentHTML('beforeend', ` <span style="opacity:.6">· versione ${window.APP_VERSION}</span>`); });
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
