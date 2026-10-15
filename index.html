@@ -31,6 +31,7 @@
   --accent: #0f5c6e; --accent-soft: #e1eff2;
   --ele: #2a78d6; --ele-soft: #e3eefb; --gas: #eb6834; --gas-soft: #fdebe3;
   --tot: #15803d; --tot-soft: #e2f3e8; --warn: #b77900; --warn-soft: #fbf1dc; --bad: #c93b33; --bad-soft: #f8e3e1; --other: #9aa3b0;
+  --k-in: #b45309; --k-in-soft: #fdf0e1; --k-cum: #6d4fd0; --k-cum-soft: #efeafd;
   --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
   --r: 8px;
@@ -41,6 +42,7 @@
   --accent: #5bbcd0; --accent-soft: #15333b;
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
+  --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
   color-scheme: dark; } }
 :root[data-theme="dark"] {
   --bg: #0e1217; --surface: #161b22; --surface-2: #1b212a;
@@ -48,6 +50,7 @@
   --accent: #5bbcd0; --accent-soft: #15333b;
   --ele: #3987e5; --ele-soft: #172a42; --gas: #e2652f; --gas-soft: #3a2117;
   --tot: #34b86e; --tot-soft: #14301f; --warn: #e0a531; --warn-soft: #362a12; --bad: #e66767; --bad-soft: #3a1c1c; --other: #69727f;
+  --k-in: #f0a050; --k-in-soft: #3a2a17; --k-cum: #a48cf0; --k-cum-soft: #272040;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -110,7 +113,6 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .scope-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
 .scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
-.kpi.sup-k { border-top: 3px solid var(--accent); }
 .dup { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: var(--r); padding: 10px; display: flex; flex-direction: column; gap: 4px; color: var(--ink); word-break: break-word; }
 .disclaimer { margin: 4px 2px 0; font-size: .8rem; color: var(--muted); font-style: italic; }
 .sup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
@@ -130,19 +132,27 @@ body.printing .side, body.printing .top { display: none; }
 body.printing .layout { display: block; }
 body.printing .report { width: 1000px; }
 body.printing .tablewrap { max-height: none !important; overflow: visible !important; }
-body.printing .kpis { grid-template-columns: repeat(4, 1fr); }
+body.printing .kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+body.printing .kpi { grid-column: span 2; } body.printing .kpi.sup-k { grid-column: span 3; }
 body.printing .charts { grid-template-columns: 1fr 1fr !important; }
 td.reason { white-space: normal; min-width: 220px; color: var(--ink-2); }
 .warnbox { background: var(--warn-soft); color: var(--ink); border-radius: var(--r); padding: 10px 14px; font-size: .88rem; }
 .warnbox ul { margin: 4px 0 0; padding-left: 18px; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
-.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 2px; }
-.kpi .lab { font-size: .8rem; color: var(--ink-2); font-weight: 600; }
-.kpi .val { font-family: var(--f-display); font-size: 1.75rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.kpi .sub { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+/* row 1: three equal tiles; row 2: the two supply tiles, wider */
+.kpi { grid-column: span 2; background: var(--surface); border: 2px solid var(--line); border-top-width: 6px; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; }
+.kpi .lab { font-size: 1rem; color: var(--ink); font-weight: 700; }
+.kpi .val { white-space: nowrap; font-family: var(--f-display); font-size: clamp(1.6rem, 2.5vw, 2.4rem); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 2px 0; }
+.kpi .val small { font-size: 1.05rem !important; }
+.kpi .sub { font-size: .98rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.kpi.kv { border-color: var(--accent); background: var(--accent-soft); }
+.kpi.ele { border-color: var(--ele); background: var(--ele-soft); }
+.kpi.gas { border-color: var(--gas); background: var(--gas-soft); }
+.kpi.sup-k { grid-column: span 3; }
+.kpi.sup-in { border-color: var(--k-in); background: var(--k-in-soft); }
+.kpi.sup-cum { border-color: var(--k-cum); background: var(--k-cum-soft); }
 .kpi.si { border-color: var(--tot); background: var(--tot-soft); }
-.kpi.ele { border-top: 3px solid var(--ele); }
-.kpi.gas { border-top: 3px solid var(--gas); }
+@media (max-width: 720px) { .kpis { grid-template-columns: minmax(0, 1fr); } .kpi, .kpi.sup-k { grid-column: auto; } .kpi .val { font-size: 2rem; } }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 14px; }
 .card-head p { margin: 2px 0 0; color: var(--muted); font-size: .85rem; max-width: 70ch; }
@@ -697,7 +707,7 @@ function render() {
     </div>
 
     <div class="kpis">
-      <div class="kpi"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span></div>
+      <div class="kpi kv"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span></div>
       <div class="kpi ele"><span class="lab">🔵 Luce validati</span><span class="val">${fmt(T.vk)} <small style="font-size:.9rem">kWh</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'ELE').length)} contratti</span></div>
       <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
       ${supplyTiles(keys)}
@@ -759,11 +769,11 @@ function supplyTiles(keys) {
   const [ly, lm] = last.split('-').map(Number), endOfPeriod = Date.UTC(ly, lm, 0, 23, 59);
   const pts = S.rows.filter(r => isValid(r) && !r.excluded && r.start && (!keys || keys.has(r.akey)));
   const kinds = rs => { const q = rs.filter(isQuick).length; return [rs.length - q ? `${rs.length - q} switch` : '', q ? `${q} voltura/sub.` : ''].filter(Boolean).join(' · ') || '–'; };
-  const tile = (title, rs) => `<div class="kpi sup-k"><span class="lab">${title}</span><span class="val">${fmt(rs.length)} <small style="font-size:.9rem">punti</small></span><span class="sub">${volTxt(rs)}</span><span class="sub">${kinds(rs)}</span></div>`;
+  const tile = (title, rs, cls) => `<div class="kpi sup-k ${cls}"><span class="lab">${title}</span><span class="val">${fmt(rs.length)} <small style="font-size:.9rem">punti</small></span><span class="sub">${volTxt(rs)}</span><span class="sub">${kinds(rs)}</span></div>`;
   const a = mk => (/^[AEIOU]/.test(monthLabel(mk)) ? 'ad ' : 'a ') + monthLabel(mk);
   const per = months.length > 1 ? 'nel periodo' : a(last);
-  return tile(`⚡ Entrano in fornitura ${per}`, pts.filter(r => S.selMonths.has(monthKey(r.start))))
-    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)));
+  return tile(`⚡ Entrano in fornitura ${per}`, pts.filter(r => S.selMonths.has(monthKey(r.start))), 'sup-in')
+    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)), 'sup-cum');
 }
 // "123456 kWh · 789 Smc" for a set of points (only the units present)
 function volTxt(rs) {
