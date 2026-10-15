@@ -110,6 +110,13 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .scope-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
 .scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.sup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.sup { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.sup .lab { font-size: .8rem; font-weight: 600; color: var(--ink-2); }
+.sup .sub { font-size: .8rem; color: var(--muted); }
+.sup-row { font-variant-numeric: tabular-nums; }
+.sup-row b { font-family: var(--f-display); font-size: 1.15rem; }
+.sup .mon { font-weight: 600; display: inline-block; min-width: 8.5em; }
 .swatches { display: flex; align-items: center; gap: 6px; }
 .sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
 .sw[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
@@ -327,6 +334,8 @@ const FIELDS = [
   { k: 'subAgente', label: 'Sub-agente (colonna Agente)', re: [/^agente$/, /^sub.?agente$/] },
   { k: 'areaManager', label: 'Area Manager (gerarchia sub-agenti)', re: [/^area manager$/, /area manager|capo area|responsabile/] },
   { k: 'data', label: 'Data per il mese (inserimento)', re: [/^data inserimento$/, /^data.*inser/, /^data firma$/, /data.*(firma|sottoscr|stipul)|^firma/, /^(data|date)(?!.*(valid|chius|esito|positiv|attivaz|modific|nascita|lettura|fine|ok\b))/] },
+  { k: 'dataAttiv', label: 'Data inizio fornitura (prevista)', re: [/data.*(inizio fornitura|decorrenza)/, /data.*attivaz/] },
+  { k: 'dataFine', label: 'Data fine contratto', re: [/^data fine contratto$/, /data.*fine/] },
   { k: 'dataOk', label: 'Data esito positivo (chiusura)', re: [/data.*(validaz|esito|positiv)/, /data.*chius/] },
   { k: 'commodity', label: 'Commodity', re: [/^commodity$/, /commodity|vettore|tipo fornitura|tipo energia/] },
   { k: 'pod', label: 'Codice POD (luce, se manca Commodity)', re: [/^codice pod$/, /^pod$/] },
@@ -465,6 +474,7 @@ function process(resetSelection) {
       code: String(cell(r, 'pod') ?? '').trim() || String(cell(r, 'pdr') ?? '').trim(),
       id: String(cell(r, 'id') ?? '').trim(), nome: String(cell(r, 'clienteNome') ?? '').trim(),
       raw: { CC: cell(r, 'cc'), QC: cell(r, 'qc'), Validazione: cell(r, 'validazione'), 'Pre-check': cell(r, 'precheck'), 'Switch In': cell(r, 'switchIn') },
+      start: m.dataAttiv >= 0 ? parseDate(cell(r, 'dataAttiv')) : null, end: m.dataFine >= 0 ? parseDate(cell(r, 'dataFine')) : null,
       agent: agentName, akey: norm(agentName), chain, firma, month: monthKey(firma), okDate: m.dataOk >= 0 ? parseDate(cell(r, 'dataOk')) : null,
       com, cliente: normCliente(cell(r, 'tipoCliente')),
       tipologia: String(cell(r, 'tipologia') ?? '').trim() || '—',
@@ -688,6 +698,7 @@ function render() {
       <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
       <div class="kpi si"><span class="lab">🟢 Switch In SI</span><span class="val">${fmt(T.sn)}</span><span class="sub">${fmt(T.sk)} kWh · ${fmt(T.ss)} Smc</span></div>
     </div>
+    ${supplyCard(keys)}
 
     <section class="card">
       <div class="card-head"><div><h2>🎯 Contratti validati</h2></div>
@@ -732,6 +743,35 @@ function render() {
     </section>
     ${statiniCard()}`).replaceAll('🟠', gasDot());
   drawCharts();
+}
+// Supply starts: validated points by expected activation date ("Data Prevista Attivazione").
+function supplyCard(keys) {
+  if (!(S.map.dataAttiv >= 0)) return '';
+  const months = [...S.selMonths].sort();
+  const [ly, lm] = months[months.length - 1].split('-').map(Number);
+  const endOfPeriod = Date.UTC(ly, lm, 0, 23, 59);          // last day of the last selected month
+  const pts = S.rows.filter(r => isValid(r) && !r.excluded && r.start && (!keys || keys.has(r.akey)));
+  const sum = rs => ({ ne: rs.filter(r => r.com === 'ELE').length, kwh: rs.reduce((s, r) => s + (r.com === 'ELE' ? r.kwh : 0), 0),
+    ng: rs.filter(r => r.com === 'GAS').length, smc: rs.reduce((s, r) => s + (r.com === 'GAS' ? r.smc : 0), 0) });
+  const entering = sum(pts.filter(r => S.selMonths.has(monthKey(r.start))));
+  const active = sum(pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod)));
+  const next = [1, 2, 3].map(i => monthKey(new Date(Date.UTC(ly, lm - 1 + i, 1))));
+  const upcoming = next.map(mk => ({ mk, ...sum(pts.filter(r => monthKey(r.start) === mk)) })).filter(x => x.ne || x.ng);
+  const block = (title, sub, x) => `<div class="sup"><span class="lab">${title}</span>
+      <div class="sup-row"><span class="dot ele"></span><b>${fmt(x.kwh)}</b> kWh <span class="muted">· ${x.ne} POD</span></div>
+      <div class="sup-row"><span class="dot gas"></span><b>${fmt(x.smc)}</b> Smc <span class="muted">· ${x.ng} PDR</span></div>
+      <span class="sub">${sub}</span></div>`;
+  const periodTxt = months.length > 1 ? 'nei mesi selezionati' : `a ${monthLabel(months[0])}`;
+  return `<section class="card">
+    <div class="card-head"><div><h2>Ingressi in fornitura</h2><p>Punti validati in base alla data prevista di attivazione.</p></div></div>
+    <div class="sup-grid">
+      ${block(`Entrano in fornitura ${periodTxt}`, `${entering.ne + entering.ng} punti`, entering)}
+      ${block(`Totale in fornitura a fine ${monthLabel(months[months.length - 1])}`, `${active.ne + active.ng} punti attivi`, active)}
+      ${upcoming.length ? `<div class="sup" style="grid-column:1 / -1"><span class="lab">In arrivo nei prossimi mesi</span>
+        ${upcoming.map(u => `<div class="sup-row small"><span class="mon">${monthLabel(u.mk)}</span> <span class="dot ele"></span>${fmt(u.kwh)} kWh <span class="dot gas" style="margin-left:6px"></span>${fmt(u.smc)} Smc <span class="muted">· ${u.ne + u.ng} punti</span></div>`).join('')}
+      </div>` : ''}
+    </div>
+  </section>`;
 }
 function aggV(vrows) {
   const a = { n: 0, ne: 0, ng: 0, kwh: 0, smc: 0 };
@@ -991,7 +1031,7 @@ function sampleData() {
   const agents = ['Agenzia Esempio Alfa', 'Agenzia Esempio Beta', 'Agenzia Esempio Gamma', 'Agenzia Esempio Delta', 'Agenzia Esempio Epsilon', 'Agenzia Esempio Zeta', 'Agenzia Esempio Eta'];
   const chainOf = { 'Agenzia Esempio Alfa': 'Agenzia Esempio Alfa,Area Manager Esempio,', 'Agenzia Esempio Beta': 'Agenzia Esempio Alfa,Area Manager Esempio,', 'Agenzia Esempio Gamma': 'Agenzia Esempio Alfa,Area Manager Esempio,',
     'Agenzia Esempio Delta': 'Agenzia Esempio Delta,Area Manager Esempio,', 'Agenzia Esempio Epsilon': 'Agenzia Esempio Delta,Area Manager Esempio,' };
-  const head = ['Area Manager', 'Agenzia', 'Data Firma', 'Commodity', 'Tipo Cliente', 'Tipologia Offerta', 'Stato Pratica', 'Stato WF', 'Switch In', 'Pre-check', 'CC', 'QC', 'Validazione', 'Data Validazione', 'kWh Annui', 'Smc Annui'];
+  const head = ['Area Manager', 'Agenzia', 'Data Firma', 'Commodity', 'Tipo Cliente', 'Tipologia Offerta', 'Stato Pratica', 'Stato WF', 'Switch In', 'Pre-check', 'CC', 'QC', 'Validazione', 'Data Validazione', 'Data Prevista Attivazione', 'kWh Annui', 'Smc Annui'];
   const rows = [head];
   for (let i = 0; i < 420; i++) {
     const com = pick(['Elettrico', 'Gas'], [6, 4]);
@@ -1006,7 +1046,7 @@ function sampleData() {
     rows.push([chainOf[agent] || 'Area Manager Esempio,', agent, `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/2026`, com, cli,
       com === 'Elettrico' ? pick(['Luce Fissa 12', 'Luce Variabile', 'Luce Green']) : pick(['Gas Fisso 12', 'Gas Variabile']),
       pick(['Chiuso', 'Aperto'], [7, 3]), pick(['Stato WF OK', 'Stato WF KO'], [85, 15]), sw,
-      pick(['OK', 'Non Effettuato', 'KO'], [85, 10, 5]), pick(['SI', 'NO'], [9, 1]), pick(['SI', 'NO'], [9, 1]), pick(['SI', 'NO'], [88, 12]), fmtDate(okD), k, s]);
+      pick(['OK', 'Non Effettuato', 'KO'], [85, 10, 5]), pick(['SI', 'NO'], [9, 1]), pick(['SI', 'NO'], [9, 1]), pick(['SI', 'NO'], [88, 12]), fmtDate(okD), fmtDate(new Date(Date.UTC(2026, month + pick([0, 1, 2], [2, 5, 3]), 1))), k, s]);
   }
   return rows;
 }
