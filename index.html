@@ -869,11 +869,11 @@ function supplyTiles(keys) {
   const kinds = rs => { const q = rs.filter(isQuick).length; return [rs.length - q ? `${rs.length - q} switch` : '', q ? `${q} voltura/sub.` : ''].filter(Boolean).join(' · ') || '–'; };
   const tile = (title, rs, cls, note = '') => `<div class="kpi sup-k ${cls}"><span class="lab">${title}</span><span class="val">${fmt(rs.length)} <small style="font-size:.9rem">punti</small></span><span class="sub">${volTxt(rs)}</span><span class="sub">${kinds(rs)}</span>${note ? `<span class="sub" style="color:var(--bad)">${note}</span>` : ''}</div>`;
   const gone = new Set(storniList(keys).filter(x => x.month <= last).map(x => x.code));
-  const goneIn = pts.filter(r => r.start.getTime() <= endOfPeriod && gone.has(r.code)).length;
+  const goneRows = pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod) && gone.has(r.code));
   const a = mk => (/^[AEIOU]/.test(monthLabel(mk)) ? 'ad ' : 'a ') + monthLabel(mk);
   const next = monthKey(new Date(Date.UTC(ly, lm, 1)));   // month after the last one analysed
   return tile(`⚡ Entrano in fornitura ${a(last)}`, pts.filter(r => monthKey(r.start) === last), 'sup-in')
-    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod) && !gone.has(r.code)), 'sup-cum', goneIn ? `al netto di ${goneIn} usciti` : '')
+    + tile(`📈 In fornitura fino ${a(last)}`, pts.filter(r => r.start.getTime() <= endOfPeriod && !(r.end && r.end.getTime() <= endOfPeriod) && !gone.has(r.code)), 'sup-cum', goneRows.length ? `al netto di ${goneRows.length} usciti: −${volTxt(goneRows).replace(' · ', ' · −')}` : '')
     + tile(`⏭️ Entrano in fornitura ${a(next)}`, pts.filter(r => monthKey(r.start) === next), 'sup-next');
 }
 // "123456 kWh · 789 Smc" for a set of points (only the units present)
