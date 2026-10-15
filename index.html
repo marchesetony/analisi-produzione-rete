@@ -110,6 +110,7 @@ details.panel > summary { cursor: pointer; font-family: var(--f-display); font-w
 .scope-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 28px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; }
 .scope-head .lbl { display: block; font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .scope-head .big { font-family: var(--f-display); font-size: 1.6rem; font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.disclaimer { margin: 4px 2px 0; font-size: .8rem; color: var(--muted); font-style: italic; }
 .sup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .sup { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 .sup .lab { font-size: .8rem; font-weight: 600; color: var(--ink-2); }
@@ -693,7 +694,7 @@ function render() {
     </div>
 
     <div class="kpis">
-      <div class="kpi"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti` : `su ${fmt(T.n)} inseriti`}</span></div>
+      <div class="kpi"><span class="lab">🎯 Contratti validati</span><span class="val">${fmt(T.vn)}</span><span class="sub">${vIn.length ? `di cui ${fmt(vIn.length)} da mesi precedenti (${volTxt(vIn)})` : `su ${fmt(T.n)} inseriti`}</span></div>
       <div class="kpi ele"><span class="lab">🔵 Luce validati</span><span class="val">${fmt(T.vk)} <small style="font-size:.9rem">kWh</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'ELE').length)} contratti</span></div>
       <div class="kpi gas"><span class="lab">🟠 Gas validati</span><span class="val">${fmt(T.vs)} <small style="font-size:.9rem">Smc</small></span><span class="sub">${fmt(vrows.filter(r => r.com === 'GAS').length)} contratti</span></div>
       <div class="kpi si"><span class="lab">🟢 Switch In SI</span><span class="val">${fmt(T.sn)}</span><span class="sub">${fmt(T.sk)} kWh · ${fmt(T.ss)} Smc</span></div>
@@ -704,8 +705,8 @@ function render() {
       <div class="card-head"><div><h2>🎯 Contratti validati</h2></div>
         <button type="button" data-copy="t2">Copia tabella</button></div>
       ${vIn.length || vOut.length ? `<div class="ruleinfo">
-        ${vIn.length ? `<div>➕ <b>${fmt(vIn.length)}</b> inseriti in mesi precedenti e chiusi dopo il ${S.cutoff}: inclusi qui (${esc(listMonths(vIn))}).</div>` : ''}
-        ${vOut.length ? `<div>➡️ <b>${fmt(vOut.length)}</b> inseriti in questo periodo ma chiusi dopo il ${S.cutoff}: vanno in ${esc(listV(vOut))}.</div>` : ''}
+        ${vIn.length ? `<div>➕ <b>${fmt(vIn.length)}</b> (${volTxt(vIn)}) inseriti in mesi precedenti e chiusi dopo il ${S.cutoff}: inclusi qui (${esc(listMonths(vIn))}).</div>` : ''}
+        ${vOut.length ? `<div>➡️ <b>${fmt(vOut.length)}</b> (${volTxt(vOut)}) inseriti in questo periodo ma chiusi dopo il ${S.cutoff}: vanno in ${esc(listV(vOut))}.</div>` : ''}
       </div>` : ''}
       <div class="tablewrap"><table id="t2">
         <thead><tr><th>Commodity</th><th>Tipo Cliente</th><th class="num">N° Contratti</th><th class="num">🔵 kWh Annui</th><th class="num">🟠 Smc Annui</th></tr></thead>
@@ -734,14 +735,15 @@ function render() {
     </section>
 
     <section class="card">
-      <div class="card-head"><div><h2>Contratti non validi · ${fmt(invalid.length)}</h2><p>Inseriti nel periodo ma senza tutti i controlli OK, con il motivo.</p></div>
+      <div class="card-head"><div><h2>Contratti non validi · ${fmt(invalid.length)} <small style="font-weight:500;font-size:.85rem;color:var(--ink-2)">${volTxt(invalid)}</small></h2><p>Inseriti nel periodo ma senza tutti i controlli OK, con il motivo.</p></div>
         ${invalid.length ? '<button type="button" data-copy="tinv">Copia tabella</button>' : ''}</div>
       ${invalid.length ? `<div class="tablewrap tall"><table id="tinv">
         <thead><tr><th>Agente</th><th>${esc(S.headers[S.map.data] || 'Data')}</th><th>ID</th><th>Cliente</th><th>Commodity</th><th class="num">Volume</th><th>Motivo</th></tr></thead>
         <tbody>${invalid.map(r => `<tr><td>${esc(r.agent)}</td><td>${fmtDate(r.firma)}</td><td>${esc(r.id)}</td><td>${esc(r.nome)}</td><td>${comCell(r.com)}</td><td class="num">${r.com === 'GAS' ? fmt(r.smc) + ' Smc' : fmt(r.kwh) + ' kWh'}</td><td class="reason">${esc(reasonOf(r))}</td></tr>`).join('')}</tbody>
       </table></div>` : '<p class="muted" style="margin:0">Tutti i contratti inseriti nel periodo hanno passato i controlli.</p>'}
     </section>
-    ${statiniCard()}`).replaceAll('🟠', gasDot());
+    ${statiniCard()}
+    <p class="disclaimer">Salvo errori e omissioni.</p>`).replaceAll('🟠', gasDot());
   drawCharts();
 }
 // Supply starts: validated points by expected activation date ("Data Prevista Attivazione").
@@ -777,6 +779,11 @@ function supplyCard(keys) {
       <tbody>${body}${tr('🟢 TOTALE', sum(pts.filter(r => list.includes(monthKey(r.start)))), 'total')}</tbody>
     </table></div>
   </section>`;
+}
+// "123456 kWh · 789 Smc" for a set of points (only the units present)
+function volTxt(rs) {
+  const k = rs.reduce((s, r) => s + (r.com === 'ELE' ? r.kwh : 0), 0), g = rs.reduce((s, r) => s + (r.com === 'GAS' ? r.smc : 0), 0);
+  return [k ? `${fmt(k)} kWh` : '', g ? `${fmt(g)} Smc` : ''].filter(Boolean).join(' · ') || '0 kWh';
 }
 function aggV(vrows) {
   const a = { n: 0, ne: 0, ng: 0, kwh: 0, smc: 0 };
@@ -849,7 +856,7 @@ function drawCharts() {
   $('cbN').style.height = '300px';
   S.charts.push(new Chart($('chN'), {
     type: 'doughnut',
-    data: { labels: [`Luce · ${nE} contratti`, `Gas · ${nG} contratti`], datasets: [{ data: [nE, nG], backgroundColor: [ele, gas], borderColor: surface, borderWidth: 2 }] },
+    data: { labels: [`Luce · ${nE} contratti · ${fmt(V.filter(r => r.com === 'ELE').reduce((s, r) => s + r.kwh, 0))} kWh`, `Gas · ${nG} contratti · ${fmt(V.filter(r => r.com === 'GAS').reduce((s, r) => s + r.smc, 0))} Smc`], datasets: [{ data: [nE, nG], backgroundColor: [ele, gas], borderColor: surface, borderWidth: 2 }] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false, cutout: '62%',
       plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10 } },
@@ -977,7 +984,7 @@ async function exportPdf() {
     if (h > maxH) { h = maxH; w = canvas.width * h / canvas.height; }
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 10 + (maxW - w) / 2, 10, w, h);
     pdf.setFontSize(8); pdf.setTextColor(120);
-    pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')}`, 10, 287);
+    pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')} · Salvo errori e omissioni`, 10, 287);
     blob = pdf.output('blob');
   } catch (err) {
     console.error(err); toast('Non sono riuscito a creare il PDF');
