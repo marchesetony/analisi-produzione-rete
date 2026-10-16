@@ -812,7 +812,8 @@ function render() {
 
     ${entities.length > 1 ? `<section class="card" id="agentCard">
       <div class="card-head"><div><h2>Dettaglio per agente</h2><p>Solo contratti validati.</p></div>
-        <button type="button" data-copy="tcmp">Copia tabella</button></div>
+        <button type="button" class="pdf-btn primary" data-pdf="agentCard">Scarica PDF</button></div>
+      <div class="chartbox" id="cbAg"><canvas id="chAg" role="img" aria-label="Contratti validati per agente, luce e gas"></canvas></div>
       <div class="tablewrap"><table id="tcmp">
         <thead><tr><th>Agente</th><th class="num">Validati</th><th class="num">🔵 Contratti luce</th><th class="num">🔵 kWh</th><th class="num">🟠 Contratti gas</th><th class="num">🟠 Smc</th></tr></thead>
         <tbody>${entities.map(e => cmpRow(e.name, e.a, '')).join('')}${cmpRow(nSubs ? '🟢 TOTALE GRUPPO' : '🟢 TOTALE', aggV(vrows), 'total')}</tbody>
@@ -1209,6 +1210,30 @@ function drawGrowth(months, keys, c) {
     } }]
   }));
 }
+// Horizontal bars per agent: validated points, luce + gas stacked, total at the end of the bar.
+function drawAgents(V, c) {
+  const by = new Map();
+  V.forEach(r => { const a = by.get(r.akey) || { name: r.agent, e: 0, g: 0 }; r.com === 'GAS' ? a.g++ : a.e++; by.set(r.akey, a); });
+  const list = [...by.values()].sort((a, b) => (b.e + b.g) - (a.e + a.g));
+  if (!list.length) return;
+  $('cbAg').style.height = Math.max(160, list.length * 26 + 60) + 'px';
+  S.charts.push(new Chart($('chAg'), {
+    type: 'bar',
+    data: { labels: list.map(a => a.name), datasets: [
+      { label: 'Luce (punti)', data: list.map(a => a.e), backgroundColor: '#22c55e', stack: 's', borderRadius: 3, barThickness: 16 },
+      { label: 'Gas (punti)', data: list.map(a => a.g), backgroundColor: '#ff7a00', stack: 's', borderRadius: 3, barThickness: 16 },
+    ] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { right: 40 } },
+      plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 12, boxHeight: 12, font: { size: 13, weight: '600' }, color: c.ink } } },
+      scales: { x: { stacked: true, beginAtZero: true, grid: { color: c.grid }, ticks: { precision: 0 } }, y: { stacked: true, grid: { display: false }, ticks: { font: { size: 13, weight: '600' }, color: c.ink } } } },
+    plugins: [{ id: 'agTot', afterDatasetsDraw(chart) {
+      const { ctx } = chart, m = chart.getDatasetMeta(1).data, m0 = chart.getDatasetMeta(0).data;
+      ctx.save(); ctx.font = `800 13px ${c.font}`; ctx.fillStyle = '#1e3a8a'; ctx.textBaseline = 'middle';
+      m.forEach((b, i) => ctx.fillText(list[i].e + list[i].g, Math.max(b.x, m0[i].x) + 6, b.y));
+      ctx.restore();
+    } }]
+  }));
+}
 function drawCharts() {
   if (typeof Chart === 'undefined') return;
   const ink = tok('--ink'), ink2 = tok('--ink-2'), grid = tok('--line'), font = tok('--f-body'), surface = tok('--surface');
@@ -1221,6 +1246,7 @@ function drawCharts() {
   const kwh = months.map(m => per(m, 'ELE', 'kwh')), smc = months.map(m => per(m, 'GAS', 'smc'));
   const labels = months.map(monthLabel);
   if ($('chGr')) drawGrowth(months, keys, { ink, ink2, grid, font, ele, gas, surface });
+  if ($('chAg')) drawAgents(V, { ink, ink2, grid, font });
   const isLight = hex => { const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})/i.exec(hex || ''); if (!m) return false; const [r, g, b] = m.slice(1).map(x => parseInt(x, 16)); return 0.299 * r + 0.587 * g + 0.114 * b > 170; };
   const valueLabels = { id: 'valueLabels', afterDatasetsDraw(chart) {
     const { ctx } = chart;
@@ -1421,7 +1447,7 @@ function statiniCard() {
 
 // ---------- PDF (A4, 1 cm margins, one page) ----------
 // Main report: one A4 page with totals only. Detail lists (non validi, elenco punti, verifica statini) print on their own, over as many pages as needed.
-const PDF_SECTIONS = { invalidCard: 'Contratti non validi', pointsCard: 'Elenco punti validati', statiniCard: 'Verifica statini', simCard: 'Simulazione compenso' };
+const PDF_SECTIONS = { agentCard: 'Dettaglio per agente', invalidCard: 'Contratti non validi', pointsCard: 'Elenco punti validati', statiniCard: 'Verifica statini', simCard: 'Simulazione compenso' };
 async function exportPdf(section) {
   if (!window.jspdf || !window.html2canvas) { toast('Libreria PDF non caricata: controlla la connessione'); return; }
   toast('Preparo il PDF…');
@@ -1573,7 +1599,7 @@ loadSample();
 
 <script>
 // version shown in the header, so it is easy to see which one is open
-window.APP_VERSION = '16/10/2026 08:28';
+window.APP_VERSION = '16/10/2026 09:51';
 document.addEventListener('DOMContentLoaded', () => { const p = document.querySelector('.top p'); if (p) p.insertAdjacentHTML('beforeend', ` <span style="opacity:.6">· versione ${window.APP_VERSION}</span>`); });
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
