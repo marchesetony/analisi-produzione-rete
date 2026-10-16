@@ -818,6 +818,10 @@ function render() {
         <thead><tr><th>Agente</th><th class="num">Validati</th><th class="num">🔵 Contratti luce</th><th class="num">🔵 kWh</th><th class="num">🟠 Contratti gas</th><th class="num">🟠 Smc</th></tr></thead>
         <tbody>${entities.map(e => cmpRow(e.name, e.a, '')).join('')}${cmpRow(nSubs ? '🟢 TOTALE GRUPPO' : '🟢 TOTALE', aggV(vrows), 'total')}</tbody>
       </table></div>
+      <div class="charts" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));margin-top:6px">
+        <div><h3 style="margin-bottom:8px">Volumi luce per agente (kWh)</h3><div class="chartbox" id="cbAgK"><canvas id="chAgK" role="img" aria-label="kWh validati per agente"></canvas></div></div>
+        <div><h3 style="margin-bottom:8px">Volumi gas per agente (Smc)</h3><div class="chartbox" id="cbAgS"><canvas id="chAgS" role="img" aria-label="Smc validati per agente"></canvas></div></div>
+      </div>
     </section>` : ''}
 
     <section class="card">
@@ -1213,7 +1217,7 @@ function drawGrowth(months, keys, c) {
 // Horizontal bars per agent: validated points, luce + gas stacked, total at the end of the bar.
 function drawAgents(V, c) {
   const by = new Map();
-  V.forEach(r => { const a = by.get(r.akey) || { name: r.agent, e: 0, g: 0 }; r.com === 'GAS' ? a.g++ : a.e++; by.set(r.akey, a); });
+  V.forEach(r => { const a = by.get(r.akey) || { name: r.agent, e: 0, g: 0, kwh: 0, smc: 0 }; if (r.com === 'GAS') { a.g++; a.smc += r.smc; } else { a.e++; a.kwh += r.kwh; } by.set(r.akey, a); });
   const list = [...by.values()].sort((a, b) => (b.e + b.g) - (a.e + a.g));
   if (!list.length) return;
   $('cbAg').style.height = Math.max(160, list.length * 26 + 60) + 'px';
@@ -1223,16 +1227,41 @@ function drawAgents(V, c) {
       { label: 'Luce (punti)', data: list.map(a => a.e), backgroundColor: '#22c55e', stack: 's', borderRadius: 3, barThickness: 16 },
       { label: 'Gas (punti)', data: list.map(a => a.g), backgroundColor: '#ff7a00', stack: 's', borderRadius: 3, barThickness: 16 },
     ] },
-    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { right: 40 } },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { right: 170 } },
       plugins: { legend: { position: 'top', align: 'start', labels: { boxWidth: 12, boxHeight: 12, font: { size: 13, weight: '600' }, color: c.ink } } },
       scales: { x: { stacked: true, beginAtZero: true, grid: { color: c.grid }, ticks: { precision: 0 } }, y: { stacked: true, grid: { display: false }, ticks: { font: { size: 13, weight: '600' }, color: c.ink } } } },
     plugins: [{ id: 'agTot', afterDatasetsDraw(chart) {
       const { ctx } = chart, m = chart.getDatasetMeta(1).data, m0 = chart.getDatasetMeta(0).data;
       ctx.save(); ctx.font = `800 13px ${c.font}`; ctx.fillStyle = '#1e3a8a'; ctx.textBaseline = 'middle';
-      m.forEach((b, i) => ctx.fillText(list[i].e + list[i].g, Math.max(b.x, m0[i].x) + 6, b.y));
+      m.forEach((b, i) => {
+        const x = Math.max(b.x, m0[i].x) + 6, tot = `${list[i].e + list[i].g}`;
+        ctx.fillStyle = '#1e3a8a'; ctx.font = `800 13px ${c.font}`; ctx.fillText(tot, x, b.y);
+        ctx.font = `600 12px ${c.font}`; ctx.fillStyle = c.ink2;
+        ctx.fillText(`luce ${list[i].e} · gas ${list[i].g}`, x + ctx.measureText(tot).width + 14, b.y);
+      });
       ctx.restore();
     } }]
   }));
+  // volumes per agent: one chart for kWh, one for Smc (different units)
+  const volChart = (id, box, key, unit, color) => {
+    const L = list.filter(a => a[key] > 0).sort((a, b) => b[key] - a[key]);
+    if (!L.length) { $(box).innerHTML = '<div class="muted small">Nessun volume.</div>'; return; }
+    $(box).style.height = Math.max(140, L.length * 24 + 50) + 'px';
+    S.charts.push(new Chart($(id), {
+      type: 'bar',
+      data: { labels: L.map(a => a.name), datasets: [{ label: unit, data: L.map(a => Math.round(a[key])), backgroundColor: color, borderRadius: 3, barThickness: 14 }] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, animation: false, layout: { padding: { right: 90 } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: x => ` ${fmt(x.parsed.x)} ${unit}` } } },
+        scales: { x: { beginAtZero: true, grid: { color: c.grid }, ticks: { callback: v => fmt(v), maxTicksLimit: 5 } }, y: { grid: { display: false }, ticks: { font: { size: 12, weight: '600' }, color: c.ink } } } },
+      plugins: [{ id: 'volLbl', afterDatasetsDraw(chart) {
+        const { ctx } = chart; ctx.save(); ctx.font = `700 12px ${c.font}`; ctx.fillStyle = '#1e3a8a'; ctx.textBaseline = 'middle';
+        chart.getDatasetMeta(0).data.forEach((b, i) => ctx.fillText(`${fmt(L[i][key])} ${unit}`, b.x + 6, b.y));
+        ctx.restore();
+      } }]
+    }));
+  };
+  if ($('chAgK')) volChart('chAgK', 'cbAgK', 'kwh', 'kWh', '#22c55e');
+  if ($('chAgS')) volChart('chAgS', 'cbAgS', 'smc', 'Smc', '#ff7a00');
 }
 function drawCharts() {
   if (typeof Chart === 'undefined') return;
@@ -1599,7 +1628,7 @@ loadSample();
 
 <script>
 // version shown in the header, so it is easy to see which one is open
-window.APP_VERSION = '16/10/2026 09:51';
+window.APP_VERSION = '16/10/2026 10:05';
 document.addEventListener('DOMContentLoaded', () => { const p = document.querySelector('.top p'); if (p) p.insertAdjacentHTML('beforeend', ` <span style="opacity:.6">· versione ${window.APP_VERSION}</span>`); });
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
