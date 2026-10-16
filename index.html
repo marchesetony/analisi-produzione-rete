@@ -149,6 +149,7 @@ body.printing .report { width: 1000px; }
 body.printing.onepage .report { width: 1500px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
 body.printing.onepage .report > .scope-head, body.printing.onepage .report > #growthCard, body.printing.onepage .report > .kpis { grid-column: 1 / -1; }
 body.printing.onepage .report { grid-auto-flow: row dense; }
+body.printing.master .report { width: 1850px; }
 body.printing.onepage #agentCard { grid-column: 2; grid-row: span 3; }
 body.printing .tablewrap { max-height: none !important; overflow: visible !important; }
 body.printing .scope-head .big { text-wrap: wrap; white-space: nowrap; }
@@ -1429,7 +1430,10 @@ async function exportPdf(section) {
   const monthsTxt = monthsList(S.selMonths);
   let blob;
   try {
-    S.printing = true; document.body.classList.add('printing'); if (!section) document.body.classList.add('onepage');
+    // master view (all agents or the area manager): one landscape page with header, growth chart and tiles only
+    const amKey = S.sim.am && agentObj(S.sim.am) ? S.sim.am : defaultAm();
+    const master = !section && (!S.sel || S.sel === amKey);
+    S.printing = true; document.body.classList.add('printing'); if (!section) document.body.classList.add(master ? 'master' : 'onepage');
     root.setAttribute('data-theme', 'light');   // the PDF is always light
     await new Promise(r => setTimeout(r, 60));
     render();
@@ -1437,13 +1441,15 @@ async function exportPdf(section) {
     if (section === 'simCard') document.querySelectorAll('#simCard details.sim-det').forEach(d => d.setAttribute('open', ''));
     const shot = el => html2canvas(el, {
       scale: 2, backgroundColor: '#ffffff', useCORS: true,
-      ignoreElements: n => n.matches?.('[data-copy], #pdfBtn, .swatches, .pdf-btn') || (!section && n.matches?.('#statiniCard, #pointsCard, #simCard, .main-skip')) || n.matches?.('.sim-set'),
+      ignoreElements: n => n.matches?.('[data-copy], #pdfBtn, .swatches, .pdf-btn') || (!section && n.matches?.('#statiniCard, #pointsCard, #simCard, .main-skip')) || n.matches?.('.sim-set')
+        || (master && n.parentElement === $('report') && !n.matches('.scope-head, #growthCard, .kpis')),
       onclone: doc => doc.querySelectorAll('.tablewrap').forEach(t => { t.style.maxHeight = 'none'; t.style.overflow = 'visible'; })
     });
     const canvas = section ? await shot($(section)) : null;
-    const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    const footer = () => { pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')} · Salvo errori e omissioni`, 10, 287); };
-    const maxW = 190, maxH = 277 - 5;            // 1 cm margins, 5 mm kept for the footer
+    const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: master ? 'landscape' : 'portrait' });
+    const pageW = master ? 297 : 210, pageH = master ? 210 : 297;
+    const footer = () => { pdf.setFontSize(8); pdf.setTextColor(120); pdf.text(`Analisi Produzione Rete · generato il ${new Date().toLocaleDateString('it-IT')} · Salvo errori e omissioni`, 10, pageH - 10); };
+    const maxW = pageW - 20, maxH = pageH - 25;  // 1 cm margins, 5 mm kept for the footer
     if (!section) {
       // one A4 page: the two-column print layout is scaled to the full width, or to the page height if taller
       const c = await shot($('report'));
@@ -1467,7 +1473,7 @@ async function exportPdf(section) {
   } catch (err) {
     console.error(err); toast('Non sono riuscito a creare il PDF');
   } finally {
-    S.printing = false; document.body.classList.remove('printing', 'onepage');
+    S.printing = false; document.body.classList.remove('printing', 'onepage', 'master');
     prev == null ? root.removeAttribute('data-theme') : root.setAttribute('data-theme', prev);
     await new Promise(r => setTimeout(r, 0));
     render();
@@ -1567,7 +1573,7 @@ loadSample();
 
 <script>
 // version shown in the header, so it is easy to see which one is open
-window.APP_VERSION = '15/10/2026 18:52';
+window.APP_VERSION = '16/10/2026 08:28';
 document.addEventListener('DOMContentLoaded', () => { const p = document.querySelector('.top p'); if (p) p.insertAdjacentHTML('beforeend', ` <span style="opacity:.6">· versione ${window.APP_VERSION}</span>`); });
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
